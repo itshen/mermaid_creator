@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedApiKey = localStorage.getItem('qwenApiKey') || '';
     document.getElementById('apiKey').value = savedApiKey;
 
+    // 检查并确保有示例对话
+    checkAndResetConversations();
+    
     // 加载对话历史
     loadConversations();
     
@@ -70,7 +73,9 @@ function setupEventListeners(quill) {
     const saveSettings = document.getElementById('saveSettings');
     const settingsDrawer = document.getElementById('settingsDrawer');
     const newConversationBtn = document.getElementById('newConversationBtn');
-
+    // 添加重置应用按钮
+    const resetAppBtn = document.getElementById('resetAppBtn');
+    
     // 发送按钮
     const sendBtn = document.getElementById('sendBtn');
     const userInput = document.getElementById('userInput');
@@ -82,8 +87,7 @@ function setupEventListeners(quill) {
     // SVG下载按钮
     const copySvgBtn = document.getElementById('copySvgBtn');
     
-    // 版本保存按钮
-    const saveVersionBtn = document.getElementById('saveVersionBtn');
+    // 版本抽屉相关
     const versionsDrawer = document.getElementById('versionsDrawer');
     const closeVersions = document.getElementById('closeVersions');
     const toggleVersionsBtn = document.getElementById('toggleVersionsBtn');
@@ -102,6 +106,36 @@ function setupEventListeners(quill) {
         closeSettingsDrawer();
         showToast('设置已保存');
     });
+    
+    // 添加重置应用按钮事件
+    if (resetAppBtn) {
+        resetAppBtn.addEventListener('click', () => {
+            if (confirm('确定要重置应用吗？这将清除所有对话和设置，恢复到初始状态。')) {
+                // 保存API Key
+                const apiKey = localStorage.getItem('qwenApiKey');
+                
+                // 清除所有localStorage
+                localStorage.clear();
+                
+                // 恢复API Key
+                if (apiKey) {
+                    localStorage.setItem('qwenApiKey', apiKey);
+                }
+                
+                // 重置已查看示例标记
+                localStorage.removeItem('hasSeenExamples');
+                
+                // 创建新的示例对话
+                createExampleConversations();
+                
+                // 关闭设置抽屉
+                closeSettingsDrawer();
+                
+                // 显示提示
+                showToast('应用已重置', 3000);
+            }
+        });
+    }
     
     // 新建对话按钮事件
     newConversationBtn.addEventListener('click', () => {
@@ -151,49 +185,6 @@ function setupEventListeners(quill) {
         }
     }
     
-    // 保存版本按钮事件
-    saveVersionBtn.addEventListener('click', openSaveVersionDialog);
-    
-    // 设置保存版本对话框按钮事件
-    const cancelSaveVersion = document.getElementById('cancelSaveVersion');
-    const confirmSaveVersion = document.getElementById('confirmSaveVersion');
-    const saveVersionDialog = document.getElementById('saveVersionDialog');
-    const versionNameInput = document.getElementById('versionNameInput');
-    
-    if (cancelSaveVersion && saveVersionDialog) {
-        cancelSaveVersion.addEventListener('click', closeSaveVersionDialog);
-    }
-    
-    if (confirmSaveVersion && saveVersionDialog && versionNameInput) {
-        confirmSaveVersion.addEventListener('click', () => {
-            const versionName = versionNameInput.value.trim();
-            if (versionName) {
-                saveCurrentVersion(versionName);
-                closeSaveVersionDialog();
-            } else {
-                showToast('请输入版本名称', 2000);
-            }
-        });
-        
-        // 添加按Enter键确认的支持
-        versionNameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                confirmSaveVersion.click();
-            } else if (e.key === 'Escape') {
-                closeSaveVersionDialog();
-            }
-        });
-    }
-    
-    // 点击对话框背景关闭
-    if (saveVersionDialog) {
-        saveVersionDialog.addEventListener('click', (e) => {
-            if (e.target === saveVersionDialog) {
-                closeSaveVersionDialog();
-            }
-        });
-    }
-    
     // 添加键盘快捷键功能
     userInput.addEventListener('keydown', (e) => {
         // 只有按下Ctrl+Enter或Command+Enter才发送消息
@@ -224,57 +215,108 @@ function setupEventListeners(quill) {
             // 当前活跃的对话ID
             const activeConversationId = localStorage.getItem('activeConversationId') || createNewConversation();
             
-            // 添加用户消息到对话历史
+            // 获取对话
             const conversation = getConversation(activeConversationId);
             if (conversation) {
-                conversation.messages.push({
-                    role: 'user',
-                    content: input
-                });
-                updateConversation(activeConversationId, conversation);
-            }
-            
-            // 发送请求到AI并处理响应
-            const result = await sendToAI(input, currentMermaidCode);
-            
-            // 提取Mermaid代码
-            const mermaidCode = extractMermaidCode(result);
-            
-            if (mermaidCode) {
-                // 更新编辑器内容前先移除事件监听器，防止死循环
-                quill.off('text-change');
+                // 添加时间戳
+                const currentTime = new Date().toISOString();
                 
-                // 更新编辑器内容
-                quill.setText(mermaidCode);
-                
-                // 更新预览
-                updateMermaidPreview(mermaidCode);
-                
-                // 添加AI响应到对话历史
-                if (conversation) {
-                    conversation.messages.push({
-                        role: 'assistant',
-                        content: result
-                    });
-                    
-                    // 将当前响应自动添加为新版本
-                    const versionName = `回复: ${input.substring(0, 20)}${input.length > 20 ? '...' : ''}`;
-                    addVersion(conversation, versionName, input, mermaidCode);
-                    
-                    updateConversation(activeConversationId, conversation);
-                    
-                    // 更新版本列表
-                    loadVersions();
+                // 检查最后一条消息是否已经是相同内容的用户消息
+                let shouldAddUserMessage = true;
+                if (conversation.messages.length > 0) {
+                    const lastMsg = conversation.messages[conversation.messages.length - 1];
+                    if (lastMsg.role === 'user' && lastMsg.content === input) {
+                        // 已经有相同内容的用户消息，不需要再添加
+                        shouldAddUserMessage = false;
+                        console.log('检测到重复的用户消息，跳过添加');
+                    }
                 }
                 
-                // 延迟添加事件监听器
-                setTimeout(() => {
-                    // 重新添加事件监听器
-                    addEditorEventListener(quill);
-                }, 100);
-            } else {
-                alert('未能从AI响应中提取有效的Mermaid代码');
-                console.error('无法提取Mermaid代码，完整响应:', result);
+                // 检查是否在旧版本上发送新消息
+                const isOnHistoricalVersion = !!conversation.currentVersionId;
+                
+                // 只有在需要添加时才添加用户消息
+                if (shouldAddUserMessage) {
+                    // 如果是在历史版本上发送新消息，添加提示日志
+                    if (isOnHistoricalVersion) {
+                        console.log(`在历史版本(${conversation.currentVersionId})上发送新消息，将修剪历史记录`);
+                    }
+                    
+                    conversation.messages.push({
+                        role: 'user',
+                        content: input,
+                        timestamp: currentTime
+                    });
+                    
+                    // 保存用户消息
+                    updateConversation(activeConversationId, conversation);
+                }
+                
+                // 发送请求到AI并处理响应
+                const result = await sendToAI(input, currentMermaidCode);
+                
+                // 提取Mermaid代码
+                const mermaidCode = extractMermaidCode(result);
+                
+                if (mermaidCode) {
+                    // 更新编辑器内容前先移除事件监听器，防止死循环
+                    quill.off('text-change');
+                    
+                    // 更新编辑器内容
+                    quill.setText(mermaidCode);
+                    
+                    // 更新预览
+                    updateMermaidPreview(mermaidCode);
+                    
+                    // 添加AI响应到对话历史
+                    if (conversation) {
+                        // 检查是否有重复的AI响应，确保不会添加重复消息
+                        const lastUserMsgIndex = findLastIndexOfRole(conversation.messages, 'user');
+                        let shouldAddResponse = true;
+                        
+                        if (lastUserMsgIndex !== -1) {
+                            // 检查最后一个用户消息后面是否已经有助手响应
+                            if (lastUserMsgIndex + 1 < conversation.messages.length && 
+                                conversation.messages[lastUserMsgIndex + 1].role === 'assistant') {
+                                // 已经有响应，更新而不是添加
+                                conversation.messages[lastUserMsgIndex + 1] = {
+                                    role: 'assistant',
+                                    content: result,
+                                    timestamp: new Date().toISOString()
+                                };
+                                shouldAddResponse = false;
+                            }
+                        }
+                        
+                        // 如果需要添加新响应
+                        if (shouldAddResponse) {
+                            conversation.messages.push({
+                                role: 'assistant',
+                                content: result,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                        
+                        // 将当前响应自动添加为新版本
+                        const versionName = ` ${input.substring(0, 20)}${input.length > 20 ? '...' : ''}`;
+                        addVersion(conversation, versionName, input, mermaidCode);
+                        
+                        // 保存回对话历史（由于已经触发过历史修剪，这里不再重复修剪）
+                        updateConversation(activeConversationId, conversation, false);
+                        
+                        // 更新版本列表
+                        loadVersions();
+                    }
+                    
+                    // 延迟添加事件监听器
+                    setTimeout(() => {
+                        // 重新添加事件监听器
+                        addEditorEventListener(quill);
+                    }, 100);
+                } else {
+                    alert('未能从AI响应中提取有效的Mermaid代码');
+                    console.error('无法提取Mermaid代码，完整响应:', result);
+                }
             }
         } catch (error) {
             console.error('发送请求时出错：', error);
@@ -454,25 +496,107 @@ async function sendToAI(userInput, currentMermaidCode) {
         throw new Error('请先在设置中配置API Key');
     }
 
+    const currentTime = new Date().toISOString();
+    const activeConversationId = localStorage.getItem('activeConversationId');
+    const conversation = getConversation(activeConversationId);
+    
     // 准备发送到AI的消息
-    let messages = [
-        {
-            role: 'system',
-            content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。'
-        },
-        {
-            role: 'user',
-            content: userInput
+    let messages = [];
+    
+    // 如果有现有对话，使用对话中的历史记录
+    if (conversation && conversation.messages && conversation.messages.length > 0) {
+        // 确保系统消息在第一位
+        const systemMessage = conversation.messages.find(msg => msg.role === 'system');
+        if (systemMessage) {
+            messages.push(systemMessage);
+            
+            // 添加系统消息之后的所有历史消息（除了系统消息）
+            // 使用新数组避免直接修改原始消息
+            const nonSystemMessages = conversation.messages
+                .filter(msg => msg.role !== 'system')
+                .slice(-20); // 保留最近20条非系统消息
+                
+            // 检查最后一条消息是否是当前要发送的用户消息
+            let hasCurrentUserMessage = false;
+            if (nonSystemMessages.length > 0) {
+                const lastMsg = nonSystemMessages[nonSystemMessages.length - 1];
+                if (lastMsg.role === 'user' && lastMsg.content === userInput) {
+                    hasCurrentUserMessage = true;
+                }
+            }
+            
+            // 添加所有历史消息
+            messages = messages.concat(nonSystemMessages);
+            
+            // 只有在历史消息中没有当前用户消息时才添加
+            if (!hasCurrentUserMessage) {
+                // 添加当前用户输入
+                messages.push({
+                    role: 'user',
+                    content: userInput,
+                    timestamp: currentTime
+                });
+            }
+        } else {
+            // 如果没有系统消息，添加默认系统消息
+            messages.push({
+                role: 'system',
+                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
+                timestamp: currentTime
+            });
+            
+            // 添加所有历史消息
+            const historicalMessages = conversation.messages.slice(-20);
+            
+            // 检查最后一条消息是否是当前要发送的用户消息
+            let hasCurrentUserMessage = false;
+            if (historicalMessages.length > 0) {
+                const lastMsg = historicalMessages[historicalMessages.length - 1];
+                if (lastMsg.role === 'user' && lastMsg.content === userInput) {
+                    hasCurrentUserMessage = true;
+                }
+            }
+            
+            messages = messages.concat(historicalMessages);
+            
+            // 只有在历史消息中没有当前用户消息时才添加
+            if (!hasCurrentUserMessage) {
+                messages.push({
+                    role: 'user',
+                    content: userInput,
+                    timestamp: currentTime
+                });
+            }
         }
-    ];
-
-    // 如果已有Mermaid代码，将其添加到消息中
-    if (currentMermaidCode) {
-        messages.splice(1, 0, {
-            role: 'assistant',
-            content: '```mermaid\n' + currentMermaidCode + '\n```'
+    } else {
+        // 如果没有现有对话，创建新的消息列表
+        messages = [
+            {
+                role: 'system',
+                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
+                timestamp: currentTime
+            }
+        ];
+        
+        // 如果已有Mermaid代码，将其添加到消息中作为助手的前一个响应
+        if (currentMermaidCode) {
+            messages.push({
+                role: 'assistant',
+                content: '```mermaid\n' + currentMermaidCode + '\n```',
+                timestamp: currentTime
+            });
+        }
+        
+        // 添加当前用户输入
+        messages.push({
+            role: 'user',
+            content: userInput,
+            timestamp: currentTime
         });
     }
+
+    // 确保发送前检查并去除重复的消息
+    messages = deduplicateMessages(messages);
 
     // 使用本地代理服务器发送请求
     const response = await fetch('/proxy/qwen', {
@@ -497,7 +621,41 @@ async function sendToAI(userInput, currentMermaidCode) {
     // 适配新版API响应格式
     const content = data.output && data.output.choices && data.output.choices[0] && 
                     data.output.choices[0].message && data.output.choices[0].message.content || '';
+    
+    // 输出调试信息
+    console.log('发送到API的消息历史:', JSON.stringify(messages));
+    
     return content;
+}
+
+// 去除重复消息
+function deduplicateMessages(messages) {
+    // 创建一个新数组存储去重后的消息
+    const dedupedMessages = [];
+    const seenContent = new Set();
+    
+    // 确保系统消息在最前面
+    const systemMessages = messages.filter(msg => msg.role === 'system');
+    if (systemMessages.length > 0) {
+        dedupedMessages.push(systemMessages[0]); // 只保留第一条系统消息
+        seenContent.add(`system:${systemMessages[0].content}`);
+    }
+    
+    // 处理非系统消息
+    for (const msg of messages) {
+        if (msg.role === 'system') continue; // 系统消息已处理
+        
+        // 创建消息的唯一标识
+        const msgKey = `${msg.role}:${msg.content}`;
+        
+        // 如果这条消息没见过，添加到结果中
+        if (!seenContent.has(msgKey)) {
+            dedupedMessages.push(msg);
+            seenContent.add(msgKey);
+        }
+    }
+    
+    return dedupedMessages;
 }
 
 // 从AI响应中提取Mermaid代码
@@ -542,6 +700,13 @@ function updateMermaidPreview(code, retryCount = 0) {
     previewDiv.innerHTML = `<div class="mermaid">${code}</div>`;
     
     try {
+        // 添加错误处理回调
+        mermaid.parseError = function(err, hash) {
+            console.error('Mermaid解析错误:', err, hash);
+            // 保存到window对象以便于访问
+            window.mermaidLastError = { err, hash };
+        };
+        
         // 确保使用与mermaid.js版本兼容的方法进行渲染
         if (typeof mermaid.run === 'function') {
             // 新版mermaid使用run方法
@@ -555,10 +720,17 @@ function updateMermaidPreview(code, retryCount = 0) {
     } catch (error) {
         console.error('Mermaid渲染错误：', error);
         
+        // 检查是否有解析错误的详细信息
+        const mermaidError = window.mermaidLastError || error;
+        
         // 检查是否已经重试次数过多
         if (retryCount >= 3) {
             // 已达到最大重试次数，显示错误给用户
-            previewDiv.innerHTML = `<div class="text-red-500 p-4">Mermaid图表渲染错误（已尝试3次修复）：${error.message}</div>`;
+            previewDiv.innerHTML = `<div class="text-red-500 p-4">
+                <p class="font-bold">Mermaid图表渲染错误（已尝试3次修复）：</p>
+                <p>${error.message || '未知错误'}</p>
+                ${mermaidError.hash ? `<p>位置: 第${mermaidError.hash.loc?.first_line || '?'}行</p>` : ''}
+            </div>`;
             return;
         }
         
@@ -571,31 +743,59 @@ function updateMermaidPreview(code, retryCount = 0) {
                 // 显示正在修复的提示
                 previewDiv.innerHTML = `<div class="text-blue-500 p-4">正在请求AI修复Mermaid语法错误，请稍候...</div>`;
                 
-                // 调用修复函数
-                requestMermaidFix(code, error, activeConversationId, retryCount).catch(fixError => {
+                // 调用修复函数，传递更详细的错误信息
+                requestMermaidFix(code, mermaidError, activeConversationId, retryCount).catch(fixError => {
                     console.error('请求AI修复图表失败：', fixError);
                     previewDiv.innerHTML = `<div class="text-red-500 p-4">修复请求失败：${fixError.message}</div>`;
                 });
             }
         } else {
             // 没有活跃对话，直接显示错误
-            previewDiv.innerHTML = `<div class="text-red-500 p-4">Mermaid图表渲染错误：${error.message}</div>`;
+            previewDiv.innerHTML = `<div class="text-red-500 p-4">
+                <p>Mermaid图表渲染错误：</p>
+                <p>${error.message || '未知错误'}</p>
+                ${mermaidError.hash ? `<p>位置: 第${mermaidError.hash.loc?.first_line || '?'}行</p>` : ''}
+            </div>`;
         }
     }
 }
 
 // 请求AI修复Mermaid语法错误
 async function requestMermaidFix(code, error, conversationId, retryCount) {
-    // 创建修复请求消息
+    // 获取详细的错误信息
+    let errorDetails;
+    try {
+        // 尝试提取更详细的错误信息
+        if (error instanceof Error) {
+            errorDetails = {
+                message: error.message,
+                name: error.name,
+                stack: error.stack,
+                // 检查是否有额外的Mermaid特定错误属性
+                details: error.str || error.hash || error.details || ''
+            };
+        } else {
+            // 如果不是Error实例，直接使用
+            errorDetails = error;
+        }
+    } catch (e) {
+        console.warn('提取错误详情失败:', e);
+        errorDetails = { message: '未知Mermaid错误' };
+    }
+
+    // 创建修复请求消息，包含更详细的错误信息
     const fixRequest = `我的Mermaid图表代码有语法错误，请修复：
-错误信息: ${error.message || JSON.stringify(error)}
+错误类型: ${errorDetails.name || '语法错误'}
+错误信息: ${errorDetails.message || JSON.stringify(error)}
+${errorDetails.details ? `错误详情: ${errorDetails.details}` : ''}
+${errorDetails.stack ? `错误堆栈: ${errorDetails.stack.split('\n')[0]}` : ''}
 
 当前代码:
 \`\`\`mermaid
 ${code}
 \`\`\`
 
-请只返回修复后的完整代码，不要解释或添加其他内容。`;
+请分析错误原因并修复代码。你的回复必须只包含修复后的完整Mermaid代码，不要包含任何解释或其他内容。`;
 
     // 获取当前对话
     const conversation = getConversation(conversationId);
@@ -623,17 +823,45 @@ ${code}
                 quill.setText(fixedCode);
             }
             
-            // 添加AI修复响应到对话历史
-            conversation.messages.push({
+            // 检查是否已有类似的修复请求，避免重复
+            const lastUserContent = findLastUserFixRequest(conversation.messages, 'Mermaid图表代码有语法错误');
+            
+            // 创建当前时间戳
+            const currentTime = new Date().toISOString();
+            
+            // 如果已存在修复请求，则删除之前的修复请求及其回复
+            if (lastUserContent !== -1) {
+                // 删除最后一次修复请求之后的所有消息（即之前的修复尝试）
+                conversation.messages = conversation.messages.slice(0, lastUserContent);
+            }
+            
+            // 添加AI修复响应到对话历史（确保始终保持system消息在最前面）
+            const systemMessage = conversation.messages.find(msg => msg.role === 'system');
+            const nonSystemMessages = conversation.messages.filter(msg => msg.role !== 'system');
+            
+            // 构建新的消息数组
+            let newMessages = [];
+            if (systemMessage) {
+                newMessages.push(systemMessage);
+            }
+            
+            // 添加其他旧消息
+            newMessages = newMessages.concat(nonSystemMessages);
+            
+            // 添加新的修复请求和回复
+            newMessages.push({
                 role: 'user',
-                content: fixRequest
+                content: fixRequest,
+                timestamp: currentTime
             });
             
-            conversation.messages.push({
+            newMessages.push({
                 role: 'assistant',
-                content: result
+                content: result,
+                timestamp: currentTime
             });
             
+            conversation.messages = newMessages;
             updateConversation(conversationId, conversation);
             
             // 尝试使用修复后的代码更新预览（增加重试计数）
@@ -656,6 +884,16 @@ ${code}
             toggleInputState(true, quill);
         }
     }
+}
+
+// 查找最后一次修复请求的索引
+function findLastUserFixRequest(messages, searchText) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user' && messages[i].content.includes(searchText)) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 // 创建新对话
@@ -723,7 +961,7 @@ function getConversation(id) {
 }
 
 // 更新对话
-function updateConversation(id, updatedConversation) {
+function updateConversation(id, updatedConversation, trimHistory = true) {
     const conversations = getConversations();
     const index = conversations.findIndex(conv => conv.id === id);
     
@@ -737,12 +975,141 @@ function updateConversation(id, updatedConversation) {
             updatedConversation.title = firstMessage.substring(0, 30) + (firstMessage.length > 30 ? '...' : '');
         }
         
+        // 检查是否需要修剪历史记录
+        if (trimHistory) {
+            // 如果有当前版本ID且添加了新消息，则需要修剪历史
+            if (updatedConversation.currentVersionId && updatedConversation.messages.length > conversations[index].messages.length) {
+                // 修剪版本历史 - 只保留当前加载的版本及更早的版本
+                if (updatedConversation.versions && updatedConversation.versions.length > 0) {
+                    const versionIndex = updatedConversation.versions.findIndex(v => v.id === updatedConversation.currentVersionId);
+                    if (versionIndex !== -1) {
+                        // 只保留当前版本及之前的版本
+                        updatedConversation.versions = updatedConversation.versions.filter((v, idx) => idx <= versionIndex);
+                        console.log(`已修剪版本历史，保留当前版本(${updatedConversation.currentVersionId})及之前的版本`);
+                    }
+                }
+                
+                // 在添加了新消息后，清除currentVersionId标记
+                delete updatedConversation.currentVersionId;
+            }
+            
+            // 限制消息历史长度，确保不超过80k
+            updatedConversation = limitConversationSize(updatedConversation, 80000);
+        }
+        
         conversations[index] = updatedConversation;
         localStorage.setItem('conversations', JSON.stringify(conversations));
         
         // 刷新UI
         loadConversations();
     }
+}
+
+// 限制对话历史大小
+function limitConversationSize(conversation, maxSize) {
+    if (!conversation || !conversation.messages) return conversation;
+    
+    // 计算当前消息的总大小
+    let totalSize = JSON.stringify(conversation.messages).length;
+    
+    // 如果小于最大大小，直接返回
+    if (totalSize <= maxSize) return conversation;
+    
+    // 确定每种角色的重要消息
+    const systemMessages = conversation.messages.filter(msg => msg.role === 'system');
+    
+    // 确保从正确的顺序找到用户的第一条消息
+    // 在Mermaid Creator中，消息顺序通常是: 
+    // [system, user, assistant, user, assistant, ...]
+    let firstUserMessage = null;
+    for (let i = 0; i < conversation.messages.length; i++) {
+        if (conversation.messages[i].role === 'user') {
+            firstUserMessage = conversation.messages[i];
+            break;
+        }
+    }
+    
+    // 计算必须保留的消息大小
+    const mustKeepMessages = [...systemMessages];
+    if (firstUserMessage) {
+        // 检查这条消息是否已包含在系统消息集合中
+        if (!mustKeepMessages.includes(firstUserMessage)) {
+            mustKeepMessages.push(firstUserMessage);
+        }
+    }
+    
+    const mustKeepSize = JSON.stringify(mustKeepMessages).length;
+    
+    // 如果必须保留的消息已经超过最大大小，则只保留这些消息
+    if (mustKeepSize > maxSize) {
+        // 如果连必须保留的消息都超出大小，那么至少保留系统消息和尽可能多的用户消息
+        if (systemMessages.length > 0) {
+            conversation.messages = [systemMessages[0]];
+            if (firstUserMessage && JSON.stringify(conversation.messages).length + JSON.stringify(firstUserMessage).length <= maxSize) {
+                conversation.messages.push(firstUserMessage);
+            }
+        } else if (firstUserMessage) {
+            conversation.messages = [firstUserMessage];
+        } else {
+            // 如果没有系统消息和用户消息，保留第一条消息
+            conversation.messages = conversation.messages.slice(0, 1);
+        }
+        return conversation;
+    }
+    
+    // 获取非必须保留的消息，排除系统消息和第一条用户消息
+    let otherMessages = conversation.messages.filter(msg => {
+        // 排除系统消息
+        if (msg.role === 'system') return false;
+        
+        // 排除第一条用户消息
+        if (firstUserMessage && msg === firstUserMessage) return false;
+        
+        return true;
+    });
+    
+    // 按时间戳降序排序（如果有时间戳），最新的在前面
+    otherMessages.sort((a, b) => {
+        if (!a.timestamp && !b.timestamp) return 0;
+        if (!a.timestamp) return 1; // 没时间戳的放后面
+        if (!b.timestamp) return -1; // 没时间戳的放后面
+        return new Date(b.timestamp) - new Date(a.timestamp); // 降序排列，最新的在前
+    });
+    
+    // 计算还能添加多少消息
+    let remainingSize = maxSize - mustKeepSize;
+    let additionalMessages = [];
+    
+    // 从最新的消息开始，保留尽可能多的消息
+    for (let i = 0; i < otherMessages.length; i++) {
+        const msg = otherMessages[i];
+        const msgSize = JSON.stringify(msg).length;
+        
+        // 如果添加这条消息后超过限制，就停止
+        if (msgSize > remainingSize) break;
+        
+        additionalMessages.push(msg);
+        remainingSize -= msgSize;
+    }
+    
+    // 合并必须保留的消息和额外消息
+    let newMessages = [...mustKeepMessages, ...additionalMessages];
+    
+    // 按原始消息顺序和对话逻辑重新排序
+    newMessages.sort((a, b) => {
+        // 系统消息总是在最前面
+        if (a.role === 'system' && b.role !== 'system') return -1;
+        if (a.role !== 'system' && b.role === 'system') return 1;
+        
+        // 按时间戳升序排列
+        if (!a.timestamp && !b.timestamp) return 0;
+        if (!a.timestamp) return -1; // 无时间戳的消息放在前面
+        if (!b.timestamp) return 1; // 无时间戳的消息放在前面
+        return new Date(a.timestamp) - new Date(b.timestamp);
+    });
+    
+    conversation.messages = newMessages;
+    return conversation;
 }
 
 // 删除对话
@@ -766,6 +1133,8 @@ function deleteConversation(id) {
         document.getElementById('preview').innerHTML = '';
     }
     
+    // 删除检查是否删除了所有对话的部分，避免自动创建示例
+    
     // 刷新UI
     loadConversations();
 }
@@ -779,10 +1148,28 @@ function loadConversations() {
     // 清空列表
     titleList.innerHTML = '';
     
-    // 如果没有对话，创建示例图表对话
+    // 如果没有对话，显示空状态提示并提供加载示例按钮
     if (conversations.length === 0) {
-        createExampleConversations();
-        return; // 会通过createExampleConversations重新调用loadConversations
+        titleList.innerHTML = `
+            <div class="p-4 text-center text-gray-500">
+                暂无对话，点击"新建对话"按钮开始
+                <div class="mt-2">
+                    <button id="loadExamplesBtn" class="text-blue-500 hover:underline">加载示例对话</button>
+                </div>
+            </div>
+        `;
+        
+        // 添加加载示例按钮的事件监听
+        setTimeout(() => {
+            const loadExamplesBtn = document.getElementById('loadExamplesBtn');
+            if (loadExamplesBtn) {
+                loadExamplesBtn.addEventListener('click', () => {
+                    createExampleConversations();
+                });
+            }
+        }, 0);
+        
+        return;
     }
     
     // 按创建时间逆序排序
@@ -792,6 +1179,7 @@ function loadConversations() {
     conversations.forEach(conv => {
         const li = document.createElement('li');
         li.className = `title-item ${conv.id === activeId ? 'active' : ''}`;
+        li.dataset.id = conv.id;
         li.innerHTML = `
             <span class="title-text truncate">${conv.title}</span>
             <button class="delete-btn text-red-500">
@@ -831,11 +1219,10 @@ function loadConversation(id) {
         item.classList.remove('active');
     });
     
-    // 查找包含特定标题文本的元素（浏览器兼容写法）
+    // 通过ID查找对应的标题元素并高亮（不再通过标题文本匹配）
     const titleElements = document.querySelectorAll('.title-item');
     for (let i = 0; i < titleElements.length; i++) {
-        const titleText = titleElements[i].querySelector('.title-text');
-        if (titleText && titleText.textContent === conversation.title) {
+        if (titleElements[i].dataset.id === id) {
             titleElements[i].classList.add('active');
             break;
         }
@@ -905,53 +1292,70 @@ function addVersion(conversation, name, prompt, code) {
         conversation.versions = [];
     }
     
-    conversation.versions.push({
-        id: Date.now().toString(),
-        name: name,
-        prompt: prompt,
-        code: code,
-        createdAt: new Date().toISOString()
-    });
+    // 确保不保存重复的版本
+    const hasExistingVersion = conversation.versions.some(
+        v => v.code === code && v.prompt === prompt
+    );
+    
+    if (!hasExistingVersion) {
+        const now = new Date().toISOString();
+        
+        // 创建新版本
+        const newVersion = {
+            id: Date.now().toString(),
+            name: name,
+            prompt: prompt,
+            code: code,
+            createdAt: now,
+            // 保存相关消息引用
+            relatedMessages: findRelatedMessages(conversation.messages, prompt)
+        };
+        
+        conversation.versions.push(newVersion);
+        
+        // 确保相关的用户消息都有时间戳
+        ensureMessagesHaveTimestamp(conversation.messages, prompt, now);
+    }
 }
 
-// 保存当前版本
-function saveCurrentVersion(versionName) {
-    const activeConversationId = localStorage.getItem('activeConversationId');
-    if (!activeConversationId) {
-        showToast('没有活跃的对话', 3000);
-        return;
+// 查找与提示词相关的消息索引
+function findRelatedMessages(messages, prompt) {
+    const indexes = [];
+    for (let i = 0; i < messages.length; i++) {
+        if (messages[i].role === 'user' && messages[i].content === prompt) {
+            indexes.push(i);
+            // 如果下一条消息是助手回复，也加入相关消息
+            if (i + 1 < messages.length && messages[i + 1].role === 'assistant') {
+                indexes.push(i + 1);
+            }
+        }
     }
-    
-    const conversation = getConversation(activeConversationId);
-    if (!conversation) {
-        showToast('找不到当前对话', 3000);
-        return;
+    return indexes;
+}
+
+// 确保消息有时间戳
+function ensureMessagesHaveTimestamp(messages, prompt, fallbackTime) {
+    for (let i = 0; i < messages.length; i++) {
+        // 为提示词相关的消息添加时间戳（如果没有）
+        if (messages[i].role === 'user' && messages[i].content === prompt && !messages[i].timestamp) {
+            messages[i].timestamp = fallbackTime;
+        }
+        // 为紧跟着的助手消息添加时间戳（如果没有）
+        if (i > 0 && messages[i-1].role === 'user' && messages[i-1].content === prompt &&
+            messages[i].role === 'assistant' && !messages[i].timestamp) {
+            messages[i].timestamp = fallbackTime;
+        }
     }
-    
-    const quill = Quill.find(document.getElementById('editor-container'));
-    if (!quill) return;
-    
-    const mermaidCode = quill.getText().trim();
-    if (!mermaidCode) {
-        showToast('当前没有可保存的图表代码', 3000);
-        return;
+}
+
+// 查找特定角色的最后一个消息索引
+function findLastIndexOfRole(messages, role) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === role) {
+            return i;
+        }
     }
-    
-    // 获取上一个用户输入作为prompt（如果存在）
-    let lastPrompt = '手动保存';
-    const userMessages = conversation.messages.filter(msg => msg.role === 'user');
-    if (userMessages.length > 0) {
-        lastPrompt = userMessages[userMessages.length - 1].content;
-    }
-    
-    // 添加版本
-    addVersion(conversation, versionName, lastPrompt, mermaidCode);
-    updateConversation(activeConversationId, conversation);
-    
-    // 更新版本列表
-    loadVersions();
-    
-    showToast(`已保存版本: ${versionName}`);
+    return -1;
 }
 
 // 加载版本列表
@@ -1010,10 +1414,26 @@ function loadVersion(version) {
     // 更新预览
     updateMermaidPreview(version.code);
     
+    // 更新最后用户输入显示
+    updateLastUserInput(version.prompt);
+    
     // 重新添加事件监听器
     setTimeout(() => {
         addEditorEventListener(quill);
     }, 50);
+    
+    // 标记当前加载的版本，而不是直接删除该版本之后的历史
+    const activeConversationId = localStorage.getItem('activeConversationId');
+    if (activeConversationId) {
+        const conversation = getConversation(activeConversationId);
+        if (conversation) {
+            // 记录当前加载的版本ID，但不删除任何历史
+            conversation.currentVersionId = version.id;
+            
+            // 保存回localStorage（只更新标记，不删除历史）
+            updateConversation(activeConversationId, conversation, false);
+        }
+    }
     
     // 可选：关闭版本抽屉
     const versionsDrawer = document.getElementById('versionsDrawer');
@@ -1099,76 +1519,6 @@ function closeSettingsDrawer() {
     }
 }
 
-// 打开保存版本对话框
-function openSaveVersionDialog() {
-    const saveVersionDialog = document.getElementById('saveVersionDialog');
-    const versionNameInput = document.getElementById('versionNameInput');
-    
-    if (!saveVersionDialog || !versionNameInput) {
-        // 如果对话框元素不存在，回退到原来的prompt方法
-        const versionName = prompt('请输入此版本的名称：', '版本 ' + new Date().toLocaleString());
-        if (versionName) {
-            saveCurrentVersion(versionName);
-        }
-        return;
-    }
-    
-    // 设置默认版本名称
-    versionNameInput.value = '版本 ' + new Date().toLocaleString();
-    
-    // 重置对话框状态
-    const dialogContent = saveVersionDialog.querySelector('div');
-    if (dialogContent) {
-        dialogContent.classList.add('scale-95', 'opacity-0');
-        dialogContent.classList.remove('scale-100', 'opacity-100');
-    }
-    
-    // 显示对话框背景
-    saveVersionDialog.classList.remove('hidden');
-    saveVersionDialog.classList.remove('bg-opacity-50');
-    saveVersionDialog.classList.add('bg-opacity-0');
-    
-    // 等一帧以确保过渡效果正常
-    requestAnimationFrame(() => {
-        // 显示对话框内容
-        saveVersionDialog.classList.add('bg-black', 'bg-opacity-50');
-        saveVersionDialog.classList.remove('bg-opacity-0');
-        
-        if (dialogContent) {
-            dialogContent.classList.remove('scale-95', 'opacity-0');
-            dialogContent.classList.add('scale-100', 'opacity-100');
-        }
-        
-        // 聚焦输入框
-        setTimeout(() => {
-            versionNameInput.focus();
-            versionNameInput.select();
-        }, 100);
-    });
-}
-
-// 关闭保存版本对话框
-function closeSaveVersionDialog() {
-    const saveVersionDialog = document.getElementById('saveVersionDialog');
-    if (!saveVersionDialog) return;
-    
-    // 缩小并淡出对话框
-    const dialogContent = saveVersionDialog.querySelector('div');
-    if (dialogContent) {
-        dialogContent.classList.remove('scale-100', 'opacity-100');
-        dialogContent.classList.add('scale-95', 'opacity-0');
-    }
-    
-    // 淡出背景
-    saveVersionDialog.classList.remove('bg-opacity-50');
-    saveVersionDialog.classList.add('bg-opacity-0');
-    
-    // 等待过渡完成后隐藏
-    setTimeout(() => {
-        saveVersionDialog.classList.add('hidden');
-    }, 300);
-}
-
 // 显示示例图表菜单 - 修改为只显示卡片界面，不直接加载示例
 function displayExamples() {
     // 确保至少有一个对话
@@ -1246,6 +1596,10 @@ function displayExamples() {
 // 创建示例图表对话
 function createExampleConversations() {
     const examples = loadExamples();
+    const currentTime = new Date().toISOString();
+    
+    // 系统消息模板
+    const systemPrompt = '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。';
     
     // 创建系统使用说明示例
     const tutorialId = Date.now().toString();
@@ -1264,12 +1618,19 @@ function createExampleConversations() {
         title: '系统使用说明',
         messages: [
             {
+                role: 'system',
+                content: systemPrompt,
+                timestamp: currentTime
+            },
+            {
                 role: 'user',
-                content: '系统使用说明'
+                content: '系统使用说明',
+                timestamp: currentTime
             },
             {
                 role: 'assistant',
-                content: '```mermaid\n' + tutorialCode + '\n```'
+                content: '```mermaid\n' + tutorialCode + '\n```',
+                timestamp: currentTime
             }
         ],
         createdAt: new Date().toISOString(),
@@ -1289,27 +1650,35 @@ function createExampleConversations() {
     Object.keys(examples).forEach((key, index) => {
         const example = examples[key];
         const exampleId = (Date.now() + index + 1).toString();
+        const exampleTime = new Date(Date.now() - (index + 1) * 60000).toISOString(); // 错开时间
         
         const exampleConversation = {
             id: exampleId,
             title: example.name,
             messages: [
                 {
+                    role: 'system',
+                    content: systemPrompt,
+                    timestamp: exampleTime
+                },
+                {
                     role: 'user',
-                    content: example.name
+                    content: example.name,
+                    timestamp: exampleTime
                 },
                 {
                     role: 'assistant',
-                    content: '```mermaid\n' + example.code + '\n```'
+                    content: '```mermaid\n' + example.code + '\n```',
+                    timestamp: exampleTime
                 }
             ],
-            createdAt: new Date(Date.now() - (index + 1) * 60000).toISOString(), // 错开创建时间
+            createdAt: exampleTime,
             versions: [{
                 id: exampleId + 'v1',
                 name: example.name,
                 prompt: example.name,
                 code: example.code,
-                createdAt: new Date(Date.now() - (index + 1) * 60000).toISOString()
+                createdAt: exampleTime
             }]
         };
         
@@ -1327,6 +1696,9 @@ function createExampleConversations() {
     
     // 加载系统使用说明对话内容
     loadConversation(tutorialId);
+    
+    // 设置已经看过示例的标记
+    localStorage.setItem('hasSeenExamples', 'true');
 }
 
 // 加载示例图表
@@ -1522,4 +1894,20 @@ function loadExamples() {
     };
 
     return examples;
-} 
+}
+
+// 检查并重置会话 - 如果没有会话则创建示例
+function checkAndResetConversations() {
+    const conversations = getConversations();
+    // 添加检查是否已经看过示例的标记
+    const hasSeenExamples = localStorage.getItem('hasSeenExamples') === 'true';
+    
+    if (conversations.length === 0 && !hasSeenExamples) {
+        console.log('未检测到任何对话且首次使用，创建示例对话...');
+        createExampleConversations();
+        // 设置已经看过示例的标记
+        localStorage.setItem('hasSeenExamples', 'true');
+        return true;
+    }
+    return false;
+}
