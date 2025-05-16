@@ -88,6 +88,10 @@ function setupEventListeners(quill) {
     const closeVersions = document.getElementById('closeVersions');
     const toggleVersionsBtn = document.getElementById('toggleVersionsBtn');
 
+    // 复制代码和打开ProcessOn按钮
+    const copyCodeBtn = document.getElementById('copyCodeBtn');
+    const openProcessOnBtn = document.getElementById('openProcessOnBtn');
+
     // 设置抽屉事件
     settingsBtn.addEventListener('click', openSettingsDrawer);
     closeSettings.addEventListener('click', closeSettingsDrawer);
@@ -317,6 +321,45 @@ function setupEventListeners(quill) {
             console.error('下载SVG失败：', err);
             showToast('下载SVG失败：' + err.message, 3000);
         }
+    });
+    
+    // 复制代码按钮事件
+    copyCodeBtn.addEventListener('click', () => {
+        const code = quill.getText().trim();
+        if (!code) {
+            showToast('没有可供复制的代码', 2000);
+            return;
+        }
+
+        // 复制到剪贴板
+        navigator.clipboard.writeText(code).then(() => {
+            // 显示Toast通知
+            showToast('Mermaid代码已复制到剪贴板');
+        }).catch(err => {
+            console.error('复制失败：', err);
+            showToast('复制失败：' + err.message, 3000);
+        });
+    });
+    
+    // 打开ProcessOn按钮事件
+    openProcessOnBtn.addEventListener('click', () => {
+        const code = quill.getText().trim();
+        if (!code) {
+            showToast('没有可用的Mermaid代码', 2000);
+            return;
+        }
+
+        // 打开ProcessOn网站
+        const processOnUrl = 'https://www.processon.com/diagrams';
+        window.open(processOnUrl, '_blank');
+        
+        // 显示提示
+        showToast('已打开ProcessOn，请在新窗口中粘贴Mermaid代码', 3000);
+        
+        // 复制代码到剪贴板，方便用户粘贴
+        navigator.clipboard.writeText(code).catch(err => {
+            console.error('复制代码失败：', err);
+        });
     });
     
     // 复制最后用户输入的按钮事件
