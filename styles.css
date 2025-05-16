@@ -1,0 +1,140 @@
+/* 通用样式 */
+:root {
+    --primary-color: #3b82f6;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --info-color: #3b82f6;
+}
+
+/* 编辑器自定义样式 */
+.ql-editor {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* 版本列表项样式 */
+.version-item {
+    position: relative;
+}
+
+.version-item:hover {
+    background-color: #f3f4f6;
+}
+
+.version-item.active {
+    background-color: #e5edff;
+    border-left: 3px solid var(--primary-color);
+}
+
+/* 加载动画 */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 标题列表样式 */
+.title-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.title-item:hover {
+    background-color: #f3f4f6;
+}
+
+.title-item.active {
+    background-color: #e5edff;
+    border-left: 3px solid var(--primary-color);
+}
+
+.title-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.delete-btn {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.title-item:hover .delete-btn {
+    opacity: 1;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* 比较视图样式 */
+.diff-view {
+    display: flex;
+    width: 100%;
+    gap: 16px;
+}
+
+.diff-left, .diff-right {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.diff-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* 对话提示 */
+.prompt-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background-color: #e5edff;
+    color: var(--primary-color);
+    font-size: 12px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+    .diff-view {
+        flex-direction: column;
+    }
+    
+    .diff-left, .diff-right {
+        width: 100%;
+    }
+} 
