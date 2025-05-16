@@ -8,6 +8,18 @@ document.addEventListener('DOMContentLoaded', () => {
         backgroundColor: '#ffffff'
     });
 
+    // 设置输入框placeholder，根据操作系统区分
+    const userInput = document.getElementById('userInput');
+    if (userInput) {
+        // 检测是否为Mac系统
+        const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+        if (isMac) {
+            userInput.placeholder = "输入您想生成的图表描述...（按Enter换行，按⌘+Enter发送）";
+        } else {
+            userInput.placeholder = "输入您想生成的图表描述...（按Enter换行，按Ctrl+Enter发送）";
+        }
+    }
+
     // 初始化Quill编辑器
     const quill = new Quill('#editor-container', {
         theme: 'snow',
@@ -27,8 +39,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // 获取活跃的对话ID
     const activeId = localStorage.getItem('activeConversationId');
     if (activeId) {
-        // 如果有活跃的对话，加载该对话的最后一个图表
-        loadConversation(activeId);
+        // 如果有活跃的对话，加载该对话的最后一个图表和最后一条用户消息
+        const conversation = loadConversation(activeId);
+        
+        // 确保加载最后一条用户消息到顶部显示区
+        if (conversation && conversation.messages && conversation.messages.length > 0) {
+            const userMessages = conversation.messages.filter(msg => msg.role === 'user');
+            if (userMessages.length > 0) {
+                const lastUserMessage = userMessages[userMessages.length - 1];
+                updateLastUserInput(lastUserMessage.content);
+            }
+        }
     } else {
         // 如果没有活跃的对话，显示示例图表
         const exampleMermaidCode = `graph TD
@@ -43,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         quill.setText(exampleMermaidCode);
         updateMermaidPreview(exampleMermaidCode);
+        
+        // 顶部用户输入显示设置为系统使用说明
+        updateLastUserInput('系统使用说明');
     }
 
     // 设置按钮事件
@@ -61,6 +85,10 @@ function setupEventListeners(quill) {
     // 发送按钮
     const sendBtn = document.getElementById('sendBtn');
     const userInput = document.getElementById('userInput');
+    
+    // 用户回复区域
+    const lastUserInput = document.getElementById('lastUserInput');
+    const copyLastInputBtn = document.getElementById('copyLastInputBtn');
 
     // SVG下载按钮
     const copySvgBtn = document.getElementById('copySvgBtn');
@@ -72,19 +100,14 @@ function setupEventListeners(quill) {
     const toggleVersionsBtn = document.getElementById('toggleVersionsBtn');
 
     // 设置抽屉事件
-    settingsBtn.addEventListener('click', () => {
-        settingsDrawer.classList.remove('hidden');
-    });
-
-    closeSettings.addEventListener('click', () => {
-        settingsDrawer.classList.add('hidden');
-    });
+    settingsBtn.addEventListener('click', openSettingsDrawer);
+    closeSettings.addEventListener('click', closeSettingsDrawer);
 
     saveSettings.addEventListener('click', () => {
         const apiKey = document.getElementById('apiKey').value.trim();
         localStorage.setItem('qwenApiKey', apiKey);
-        settingsDrawer.classList.add('hidden');
-        alert('设置已保存');
+        closeSettingsDrawer();
+        showToast('设置已保存');
     });
     
     // 新建对话按钮事件
@@ -99,51 +122,104 @@ function setupEventListeners(quill) {
         if (versionsDrawer.classList.contains('hidden')) {
             // 打开版本抽屉前先更新版本列表
             loadVersions();
+            // 显示背景
             versionsDrawer.classList.remove('hidden');
+            // 等一帧以确保过渡效果正常
+            requestAnimationFrame(() => {
+                // 滑入抽屉
+                const drawerContent = versionsDrawer.querySelector('div');
+                if (drawerContent) {
+                    drawerContent.classList.remove('translate-x-full');
+                }
+            });
+        } else {
+            // 关闭抽屉
+            closeVersionsDrawer();
+        }
+    });
+    
+    closeVersions.addEventListener('click', closeVersionsDrawer);
+    
+    // 抽取关闭版本抽屉的函数，确保一致性
+    function closeVersionsDrawer() {
+        const versionsDrawer = document.getElementById('versionsDrawer');
+        if (!versionsDrawer) return;
+        
+        // 滑出抽屉
+        const drawerContent = versionsDrawer.querySelector('div');
+        if (drawerContent) {
+            drawerContent.classList.add('translate-x-full');
+            // 等待过渡完成后隐藏背景
+            setTimeout(() => {
+                versionsDrawer.classList.add('hidden');
+            }, 300);
         } else {
             versionsDrawer.classList.add('hidden');
         }
-    });
-    
-    closeVersions.addEventListener('click', () => {
-        versionsDrawer.classList.add('hidden');
-    });
+    }
     
     // 保存版本按钮事件
-    saveVersionBtn.addEventListener('click', () => {
-        const versionName = prompt('请输入此版本的名称：', '版本 ' + new Date().toLocaleString());
-        if (versionName) {
-            saveCurrentVersion(versionName);
-        }
-    });
+    saveVersionBtn.addEventListener('click', openSaveVersionDialog);
+    
+    // 设置保存版本对话框按钮事件
+    const cancelSaveVersion = document.getElementById('cancelSaveVersion');
+    const confirmSaveVersion = document.getElementById('confirmSaveVersion');
+    const saveVersionDialog = document.getElementById('saveVersionDialog');
+    const versionNameInput = document.getElementById('versionNameInput');
+    
+    if (cancelSaveVersion && saveVersionDialog) {
+        cancelSaveVersion.addEventListener('click', closeSaveVersionDialog);
+    }
+    
+    if (confirmSaveVersion && saveVersionDialog && versionNameInput) {
+        confirmSaveVersion.addEventListener('click', () => {
+            const versionName = versionNameInput.value.trim();
+            if (versionName) {
+                saveCurrentVersion(versionName);
+                closeSaveVersionDialog();
+            } else {
+                showToast('请输入版本名称', 2000);
+            }
+        });
+        
+        // 添加按Enter键确认的支持
+        versionNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                confirmSaveVersion.click();
+            } else if (e.key === 'Escape') {
+                closeSaveVersionDialog();
+            }
+        });
+    }
+    
+    // 点击对话框背景关闭
+    if (saveVersionDialog) {
+        saveVersionDialog.addEventListener('click', (e) => {
+            if (e.target === saveVersionDialog) {
+                closeSaveVersionDialog();
+            }
+        });
+    }
     
     // 添加键盘快捷键功能
     userInput.addEventListener('keydown', (e) => {
-        // 只有在按下Shift+Enter或Ctrl+Enter时才发送消息
-        if (e.key === 'Enter') {
-            if (e.shiftKey) {
-                // Shift+Enter允许换行，不做处理
-                return;
-            } else if (e.ctrlKey || e.metaKey) {
-                // Ctrl+Enter或Command+Enter发送消息
-                e.preventDefault(); // 阻止默认行为
-                if (!sendBtn.disabled) {
-                    sendBtn.click(); // 触发发送按钮点击
-                }
-            } else {
-                // 普通Enter键也发送消息
-                e.preventDefault(); // 阻止默认行为
-                if (!sendBtn.disabled) {
-                    sendBtn.click(); // 触发发送按钮点击
-                }
+        // 只有按下Ctrl+Enter或Command+Enter才发送消息
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault(); // 阻止默认行为
+            if (!sendBtn.disabled) {
+                sendBtn.click(); // 触发发送按钮点击
             }
         }
+        // 所有其他情况的Enter键都正常处理（包括普通Enter和Shift+Enter）
     });
 
     // 发送消息事件
     sendBtn.addEventListener('click', async () => {
         const input = userInput.value.trim();
         if (!input) return;
+
+        // 立即更新最后用户输入显示
+        updateLastUserInput(input);
 
         // 禁用输入和按钮
         toggleInputState(false, quill);
@@ -241,18 +317,53 @@ function setupEventListeners(quill) {
             downloadLink.click();
             document.body.removeChild(downloadLink);
             
+            // 显示Toast通知
+            showToast('SVG图表已开始下载');
+            
             // 清理对象URL
             setTimeout(() => {
                 URL.revokeObjectURL(svgUrl);
             }, 100);
         } catch (err) {
             console.error('下载SVG失败：', err);
-            alert('下载SVG失败：' + err.message);
+            showToast('下载SVG失败：' + err.message, 3000);
         }
     });
+    
+    // 复制最后用户输入的按钮事件
+    if (copyLastInputBtn) {
+        copyLastInputBtn.addEventListener('click', () => {
+            const lastUserInput = document.getElementById('lastUserInput');
+            const textToCopy = lastUserInput.dataset.fullText || lastUserInput.textContent;
+            
+            if (!textToCopy) return;
+            
+            // 复制到剪贴板
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // 显示Toast通知
+                showToast('用户输入已复制到剪贴板');
+            }).catch(err => {
+                console.error('复制失败：', err);
+                showToast('复制失败：' + err.message, 3000);
+            });
+        });
+    }
 
     // 初始添加编辑器事件监听器
     addEditorEventListener(quill);
+    
+    // 点击抽屉背景关闭
+    settingsDrawer.addEventListener('click', (e) => {
+        if (e.target === settingsDrawer) {
+            closeSettingsDrawer();
+        }
+    });
+    
+    versionsDrawer.addEventListener('click', (e) => {
+        if (e.target === versionsDrawer) {
+            closeVersionsDrawer();
+        }
+    });
 }
 
 // 添加编辑器事件监听器，抽离为独立函数便于重用
@@ -553,6 +664,9 @@ function createNewConversation() {
             // 清空版本列表
             document.getElementById('versionsList').innerHTML = '';
             
+            // 顶部用户输入显示设置为系统使用说明
+            updateLastUserInput('系统使用说明');
+            
             // 延迟重新添加事件处理器
             setTimeout(() => {
                 addEditorEventListener(quill);
@@ -624,7 +738,7 @@ function deleteConversation(id) {
     loadConversations();
 }
 
-// 加载对话列表到UI
+// 加载图表列表到UI
 function loadConversations() {
     const titleList = document.getElementById('titleList');
     const conversations = getConversations();
@@ -714,6 +828,17 @@ function loadConversation(id) {
             }
         }
     }
+    
+    // 获取最后一条用户消息并显示
+    const userMessages = conversation.messages.filter(msg => msg.role === 'user');
+    if (userMessages.length > 0) {
+        const lastUserMessage = userMessages[userMessages.length - 1];
+        updateLastUserInput(lastUserMessage.content);
+    } else {
+        // 如果没有用户消息，清空显示
+        updateLastUserInput('');
+    }
+    
     return conversation;
 }
 
@@ -755,13 +880,13 @@ function addVersion(conversation, name, prompt, code) {
 function saveCurrentVersion(versionName) {
     const activeConversationId = localStorage.getItem('activeConversationId');
     if (!activeConversationId) {
-        alert('没有活跃的对话');
+        showToast('没有活跃的对话', 3000);
         return;
     }
     
     const conversation = getConversation(activeConversationId);
     if (!conversation) {
-        alert('找不到当前对话');
+        showToast('找不到当前对话', 3000);
         return;
     }
     
@@ -770,7 +895,7 @@ function saveCurrentVersion(versionName) {
     
     const mermaidCode = quill.getText().trim();
     if (!mermaidCode) {
-        alert('当前没有可保存的图表代码');
+        showToast('当前没有可保存的图表代码', 3000);
         return;
     }
     
@@ -788,7 +913,7 @@ function saveCurrentVersion(versionName) {
     // 更新版本列表
     loadVersions();
     
-    alert('版本已保存');
+    showToast(`已保存版本: ${versionName}`);
 }
 
 // 加载版本列表
@@ -857,4 +982,151 @@ function loadVersion(version) {
     if (versionsDrawer) {
         versionsDrawer.classList.add('hidden');
     }
+}
+
+// 更新最后用户输入显示
+function updateLastUserInput(text) {
+    const lastUserInput = document.getElementById('lastUserInput');
+    if (!lastUserInput) return;
+    
+    if (!text) {
+        lastUserInput.textContent = '';
+        lastUserInput.dataset.fullText = '';
+        return;
+    }
+    
+    // 显示用户输入文本（自动截断）
+    lastUserInput.textContent = text;
+    
+    // 保存完整文本用于复制
+    lastUserInput.dataset.fullText = text;
+}
+
+// 显示Toast通知
+function showToast(message = '已复制到剪贴板', duration = 2000) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    
+    // 设置消息
+    if (message) {
+        toast.textContent = message;
+    }
+    
+    // 显示Toast
+    toast.classList.remove('invisible', 'opacity-0');
+    toast.classList.add('opacity-100');
+    
+    // 设置自动隐藏
+    setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+        
+        // 等待淡出动画完成后隐藏
+        setTimeout(() => {
+            toast.classList.add('invisible');
+        }, 300);
+    }, duration);
+}
+
+// 打开设置抽屉函数
+function openSettingsDrawer() {
+    if (!settingsDrawer) return;
+    
+    // 显示背景
+    settingsDrawer.classList.remove('hidden');
+    // 等一帧以确保过渡效果正常
+    requestAnimationFrame(() => {
+        // 滑入抽屉
+        const drawerContent = settingsDrawer.querySelector('div');
+        if (drawerContent) {
+            drawerContent.classList.remove('translate-x-full');
+        }
+    });
+}
+
+// 关闭设置抽屉函数
+function closeSettingsDrawer() {
+    if (!settingsDrawer) return;
+    
+    // 滑出抽屉
+    const drawerContent = settingsDrawer.querySelector('div');
+    if (drawerContent) {
+        drawerContent.classList.add('translate-x-full');
+        // 等待过渡完成后隐藏背景
+        setTimeout(() => {
+            settingsDrawer.classList.add('hidden');
+        }, 300);
+    } else {
+        settingsDrawer.classList.add('hidden');
+    }
+}
+
+// 打开保存版本对话框
+function openSaveVersionDialog() {
+    const saveVersionDialog = document.getElementById('saveVersionDialog');
+    const versionNameInput = document.getElementById('versionNameInput');
+    
+    if (!saveVersionDialog || !versionNameInput) {
+        // 如果对话框元素不存在，回退到原来的prompt方法
+        const versionName = prompt('请输入此版本的名称：', '版本 ' + new Date().toLocaleString());
+        if (versionName) {
+            saveCurrentVersion(versionName);
+        }
+        return;
+    }
+    
+    // 设置默认版本名称
+    versionNameInput.value = '版本 ' + new Date().toLocaleString();
+    
+    // 重置对话框状态
+    const dialogContent = saveVersionDialog.querySelector('div');
+    if (dialogContent) {
+        dialogContent.classList.add('scale-95', 'opacity-0');
+        dialogContent.classList.remove('scale-100', 'opacity-100');
+    }
+    
+    // 显示对话框背景
+    saveVersionDialog.classList.remove('hidden');
+    saveVersionDialog.classList.remove('bg-opacity-50');
+    saveVersionDialog.classList.add('bg-opacity-0');
+    
+    // 等一帧以确保过渡效果正常
+    requestAnimationFrame(() => {
+        // 显示对话框内容
+        saveVersionDialog.classList.add('bg-black', 'bg-opacity-50');
+        saveVersionDialog.classList.remove('bg-opacity-0');
+        
+        if (dialogContent) {
+            dialogContent.classList.remove('scale-95', 'opacity-0');
+            dialogContent.classList.add('scale-100', 'opacity-100');
+        }
+        
+        // 聚焦输入框
+        setTimeout(() => {
+            versionNameInput.focus();
+            versionNameInput.select();
+        }, 100);
+    });
+}
+
+// 关闭保存版本对话框
+function closeSaveVersionDialog() {
+    const saveVersionDialog = document.getElementById('saveVersionDialog');
+    if (!saveVersionDialog) return;
+    
+    // 缩小并淡出对话框
+    const dialogContent = saveVersionDialog.querySelector('div');
+    if (dialogContent) {
+        dialogContent.classList.remove('scale-100', 'opacity-100');
+        dialogContent.classList.add('scale-95', 'opacity-0');
+    }
+    
+    // 淡出背景
+    saveVersionDialog.classList.remove('bg-opacity-50');
+    saveVersionDialog.classList.add('bg-opacity-0');
+    
+    // 等待过渡完成后隐藏
+    setTimeout(() => {
+        saveVersionDialog.classList.add('hidden');
+    }, 300);
 } 

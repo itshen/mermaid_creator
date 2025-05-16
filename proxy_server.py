@@ -20,7 +20,7 @@ class ProxyHandler(SimpleHTTPRequestHandler):
             
             # 获取API密钥和其他数据
             api_key = request_data.get('api_key', '')
-            model = request_data.get('model', 'qwen-plus')
+            model = request_data.get('model', 'qwen-plus-latest')
             messages = request_data.get('messages', [])
             
             # 准备发送到阿里云的请求
