@@ -13,13 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         theme: 'snow',
         placeholder: '在这里查看和编辑Mermaid代码...',
         modules: {
-            toolbar: [
-                ['bold', 'italic', 'underline', 'strike'],
-                ['code-block'],
-                [{ 'header': 1 }, { 'header': 2 }],
-                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                ['clean']
-            ]
+            toolbar: false
         }
     });
 
@@ -125,18 +119,23 @@ function setupEventListeners(quill) {
     
     // 添加键盘快捷键功能
     userInput.addEventListener('keydown', (e) => {
-        // 直接Enter键发送消息（因为现在是单行输入框）
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault(); // 阻止默认行为
-            if (!sendBtn.disabled) {
-                sendBtn.click(); // 触发发送按钮点击
-            }
-        }
-        // Ctrl+Enter或Command+Enter也支持
-        else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-            e.preventDefault(); // 阻止默认行为
-            if (!sendBtn.disabled) {
-                sendBtn.click(); // 触发发送按钮点击
+        // 只有在按下Shift+Enter或Ctrl+Enter时才发送消息
+        if (e.key === 'Enter') {
+            if (e.shiftKey) {
+                // Shift+Enter允许换行，不做处理
+                return;
+            } else if (e.ctrlKey || e.metaKey) {
+                // Ctrl+Enter或Command+Enter发送消息
+                e.preventDefault(); // 阻止默认行为
+                if (!sendBtn.disabled) {
+                    sendBtn.click(); // 触发发送按钮点击
+                }
+            } else {
+                // 普通Enter键也发送消息
+                e.preventDefault(); // 阻止默认行为
+                if (!sendBtn.disabled) {
+                    sendBtn.click(); // 触发发送按钮点击
+                }
             }
         }
     });

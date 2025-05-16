@@ -15,8 +15,8 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto p-4">
-        <div class="flex flex-col md:flex-row gap-4">
+    <div class="container mx-auto p-2 md:p-4 h-screen flex flex-col">
+        <div class="flex flex-col md:flex-row gap-4 h-full overflow-hidden">
             <!-- 侧边栏 -->
             <div class="w-full md:w-64 bg-white rounded-lg shadow p-4">
                 <div class="flex items-center justify-between mb-4">
@@ -33,7 +33,7 @@
             </div>
             
             <!-- 主内容区 -->
-            <div class="flex-1 bg-white rounded-lg shadow p-4">
+            <div class="flex-1 bg-white rounded-lg shadow p-4 flex flex-col max-h-screen overflow-auto">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex gap-2">
                         <button id="settingsBtn" class="bg-gray-200 hover:bg-gray-300 p-2 rounded transition-colors">
@@ -61,16 +61,19 @@
                     <h1 class="text-xl font-bold">AI Mermaid图表生成器</h1>
                 </div>
                 
-                <!-- 编辑器 -->
-                <div id="editor-container" class="h-96 border rounded-md mb-4"></div>
-                
-                <!-- 预览 -->
-                <div id="preview" class="border rounded-md p-4 min-h-[200px] bg-gray-50 overflow-auto mb-4"></div>
+                <!-- 编辑器和预览区容器 -->
+                <div class="flex flex-col lg:flex-row gap-4 mb-4 flex-grow overflow-hidden">
+                    <!-- 编辑器 -->
+                    <div id="editor-container" class="lg:w-1/2 h-1/2 lg:h-full border rounded-md min-h-[150px] flex-shrink-0"></div>
+                    
+                    <!-- 预览 -->
+                    <div id="preview" class="lg:w-1/2 h-1/2 lg:h-full border rounded-md p-4 bg-gray-50 overflow-auto flex-shrink-0"></div>
+                </div>
                 
                 <!-- 输入框 -->
-                <div class="flex gap-2">
-                    <input type="text" id="userInput" placeholder="输入您想生成的图表描述..." class="flex-1 border rounded-md p-2" />
-                    <button id="sendBtn" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition-colors">发送</button>
+                <div class="flex gap-2 mt-auto">
+                    <textarea id="userInput" placeholder="输入您想生成的图表描述..." class="flex-1 border rounded-md p-2 resize-y min-h-[60px]" rows="3"></textarea>
+                    <button id="sendBtn" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition-colors self-end">发送</button>
                 </div>
             </div>
         </div>
@@ -149,6 +152,7 @@
                         <h4 class="font-semibold text-blue-500">⚙️ 快捷键</h4>
                         <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1 mt-1">
                             <li><kbd class="px-1 py-0.5 bg-gray-100 border rounded">Enter</kbd> 发送消息</li>
+                            <li><kbd class="px-1 py-0.5 bg-gray-100 border rounded">Shift</kbd> + <kbd class="px-1 py-0.5 bg-gray-100 border rounded">Enter</kbd> 换行</li>
                             <li><kbd class="px-1 py-0.5 bg-gray-100 border rounded">Ctrl</kbd> + <kbd class="px-1 py-0.5 bg-gray-100 border rounded">Enter</kbd> 发送消息</li>
                         </ul>
                     </div>
