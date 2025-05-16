@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 设置页面背景色为浅灰色
     document.body.style.backgroundColor = '#f8f8f8';
     
+    // 添加修复状态标志
+    window.isFixingMermaid = false;
+    
     // 初始化Mermaid
     mermaid.initialize({
         startOnLoad: true,
@@ -14,6 +17,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 添加错误Toast的CSS样式
+    const style = document.createElement('style');
+    style.textContent = `
+        #toast.error-toast {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border-left: 4px solid #dc2626;
+            box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.1), 0 2px 4px -1px rgba(220, 38, 38, 0.06);
+            font-weight: 500;
+        }
+    `;
+    document.head.appendChild(style);
+    
     // 设置输入框placeholder，根据操作系统区分
     const userInput = document.getElementById('userInput');
     if (userInput) {
@@ -485,7 +501,7 @@ function toggleInputState(enabled, quill) {
                 toggleInputState(true, quill);
                 alert('请求超时，已恢复输入状态');
             }
-        }, 60000); // 1分钟超时
+        }, 120000); // 2分钟超时
     }
 }
 
@@ -705,6 +721,41 @@ function updateMermaidPreview(code, retryCount = 0) {
             console.error('Mermaid解析错误:', err, hash);
             // 保存到window对象以便于访问
             window.mermaidLastError = { err, hash };
+            
+            // 添加Toast通知，包含位置信息
+            const locationInfo = hash && hash.loc ? `第${hash.loc.first_line || '?'}行` : '';
+            const errorMsg = err.message || '未知错误';
+            showToast(`Mermaid解析错误: ${errorMsg} ${locationInfo ? `(${locationInfo})` : ''}`, 5000);
+            
+            // 检查是否已经有修复请求在进行中
+            if (window.isFixingMermaid) {
+                console.log('已有修复请求在进行中，跳过重复请求');
+                return;
+            }
+            
+            // 如果未达到最大重试次数，且没有修复请求在进行中，则启动修复流程
+            if (retryCount < 3) {
+                console.log(`尝试自动修复Mermaid错误，第${retryCount+1}次尝试`);
+                const activeConversationId = localStorage.getItem('activeConversationId');
+                
+                // 设置修复状态为进行中
+                window.isFixingMermaid = true;
+                
+                // 显示正在修复的提示
+                previewDiv.innerHTML = `<div class="text-blue-500 p-4">正在请求AI修复Mermaid语法错误，请稍候...</div>`;
+                
+                // 适当延迟确保UI更新
+                setTimeout(() => {
+                    requestMermaidFix(code, {err, hash}, activeConversationId, retryCount)
+                        .catch(fixError => {
+                            console.error('请求AI修复图表失败：', fixError);
+                        })
+                        .finally(() => {
+                            // 无论成功失败，完成后重置修复状态
+                            window.isFixingMermaid = false;
+                        });
+                }, 100);
+            }
         };
         
         // 确保使用与mermaid.js版本兼容的方法进行渲染
@@ -723,6 +774,13 @@ function updateMermaidPreview(code, retryCount = 0) {
         // 检查是否有解析错误的详细信息
         const mermaidError = window.mermaidLastError || error;
         
+        // 提取位置信息
+        const locationInfo = mermaidError.hash && mermaidError.hash.loc ? 
+            `第${mermaidError.hash.loc.first_line || '?'}行` : '';
+        
+        // 显示Toast通知，加入位置信息
+        showToast(`Mermaid渲染错误: ${error.message || '未知错误'} ${locationInfo ? `(${locationInfo})` : ''}`, 5000);
+        
         // 检查是否已经重试次数过多
         if (retryCount >= 3) {
             // 已达到最大重试次数，显示错误给用户
@@ -731,8 +789,19 @@ function updateMermaidPreview(code, retryCount = 0) {
                 <p>${error.message || '未知错误'}</p>
                 ${mermaidError.hash ? `<p>位置: 第${mermaidError.hash.loc?.first_line || '?'}行</p>` : ''}
             </div>`;
+            // 最终失败的更明显的Toast
+            showToast(`多次修复失败，请手动修改图表代码`, 4000);
             return;
         }
+        
+        // 检查是否已有修复请求在进行
+        if (window.isFixingMermaid) {
+            console.log('已有修复请求在进行中，跳过重复请求');
+            return;
+        }
+        
+        // 标记开始修复
+        window.isFixingMermaid = true;
         
         // 尝试请求AI修复语法错误
         const activeConversationId = localStorage.getItem('activeConversationId');
@@ -744,10 +813,19 @@ function updateMermaidPreview(code, retryCount = 0) {
                 previewDiv.innerHTML = `<div class="text-blue-500 p-4">正在请求AI修复Mermaid语法错误，请稍候...</div>`;
                 
                 // 调用修复函数，传递更详细的错误信息
-                requestMermaidFix(code, mermaidError, activeConversationId, retryCount).catch(fixError => {
-                    console.error('请求AI修复图表失败：', fixError);
-                    previewDiv.innerHTML = `<div class="text-red-500 p-4">修复请求失败：${fixError.message}</div>`;
-                });
+                requestMermaidFix(code, mermaidError, activeConversationId, retryCount)
+                    .catch(fixError => {
+                        console.error('请求AI修复图表失败：', fixError);
+                        previewDiv.innerHTML = `<div class="text-red-500 p-4">修复请求失败：${fixError.message}</div>`;
+                        // 显示修复失败的Toast
+                        showToast(`AI修复失败: ${fixError.message}`, 4000);
+                    })
+                    .finally(() => {
+                        // 重置修复状态
+                        window.isFixingMermaid = false;
+                    });
+            } else {
+                window.isFixingMermaid = false; // 重置状态
             }
         } else {
             // 没有活跃对话，直接显示错误
@@ -756,6 +834,7 @@ function updateMermaidPreview(code, retryCount = 0) {
                 <p>${error.message || '未知错误'}</p>
                 ${mermaidError.hash ? `<p>位置: 第${mermaidError.hash.loc?.first_line || '?'}行</p>` : ''}
             </div>`;
+            window.isFixingMermaid = false; // 重置状态
         }
     }
 }
@@ -783,6 +862,9 @@ async function requestMermaidFix(code, error, conversationId, retryCount) {
         errorDetails = { message: '未知Mermaid错误' };
     }
 
+    // 显示开始修复的Toast通知
+    showToast(`正在尝试自动修复Mermaid图表...`, 3000);
+
     // 创建修复请求消息，包含更详细的错误信息
     const fixRequest = `我的Mermaid图表代码有语法错误，请修复：
 错误类型: ${errorDetails.name || '语法错误'}
@@ -800,6 +882,7 @@ ${code}
     // 获取当前对话
     const conversation = getConversation(conversationId);
     if (!conversation) {
+        window.isFixingMermaid = false; // 确保重置状态
         throw new Error('找不到当前对话');
     }
 
@@ -862,7 +945,56 @@ ${code}
             });
             
             conversation.messages = newMessages;
+            
+            // 检查当前是否正在查看某个版本
+            const isViewingVersion = !!conversation.currentVersionId;
+            
+            // 如果正在查看某个版本，则更新该版本的代码
+            if (isViewingVersion) {
+                const versionIndex = conversation.versions.findIndex(v => v.id === conversation.currentVersionId);
+                if (versionIndex !== -1) {
+                    // 更新版本中的代码
+                    conversation.versions[versionIndex].code = fixedCode;
+                    // 添加修复标记
+                    if (!conversation.versions[versionIndex].name.includes('(已修复)')) {
+                        conversation.versions[versionIndex].name += ' (已修复)';
+                    }
+                    // 记录修复时间
+                    conversation.versions[versionIndex].fixedAt = currentTime;
+                    console.log(`已更新版本 ${conversation.currentVersionId} 的代码`);
+                }
+            } else {
+                // 如果不是查看特定版本，则取最后一个版本进行更新
+                if (conversation.versions && conversation.versions.length > 0) {
+                    const lastVersionIndex = conversation.versions.length - 1;
+                    // 更新最后一个版本的代码
+                    conversation.versions[lastVersionIndex].code = fixedCode;
+                    // 添加修复标记
+                    if (!conversation.versions[lastVersionIndex].name.includes('(已修复)')) {
+                        conversation.versions[lastVersionIndex].name += ' (已修复)';
+                    }
+                    // 记录修复时间
+                    conversation.versions[lastVersionIndex].fixedAt = currentTime;
+                    console.log(`已更新最后版本的代码`);
+                } else {
+                    // 如果没有任何版本，创建一个新版本
+                    const lastUserMessage = findLastUserMessage(conversation.messages);
+                    const versionName = lastUserMessage ? 
+                        `${lastUserMessage.substring(0, 20)}${lastUserMessage.length > 20 ? '...' : ''} (已修复)` : 
+                        '自动修复版本';
+                    
+                    addVersion(conversation, versionName, lastUserMessage || '自动修复', fixedCode);
+                    console.log(`已创建新的修复版本`);
+                }
+            }
+            
             updateConversation(conversationId, conversation);
+            
+            // 刷新版本列表UI
+            loadVersions();
+            
+            // 显示修复成功的Toast
+            showToast(`Mermaid图表已自动修复并更新到版本历史`, 3000);
             
             // 尝试使用修复后的代码更新预览（增加重试计数）
             updateMermaidPreview(fixedCode, retryCount + 1);
@@ -877,6 +1009,8 @@ ${code}
             throw new Error('未能从AI响应中提取有效的Mermaid代码');
         }
     } catch (error) {
+        // 显示修复失败的Toast
+        showToast(`自动修复失败: ${error.message}`, 4000);
         throw error;
     } finally {
         // 恢复输入和按钮状态
@@ -894,6 +1028,16 @@ function findLastUserFixRequest(messages, searchText) {
         }
     }
     return -1;
+}
+
+// 查找最后一条用户消息的内容
+function findLastUserMessage(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user' && !messages[i].content.includes('Mermaid图表代码有语法错误')) {
+            return messages[i].content;
+        }
+    }
+    return null;
 }
 
 // 创建新对话
@@ -1465,23 +1609,55 @@ function showToast(message = '已复制到剪贴板', duration = 2000) {
     const toast = document.getElementById('toast');
     if (!toast) return;
     
+    // 根据消息长度决定持续时间
+    if (message.length > 50 && duration < 4000) {
+        duration = 4000; // 对于长消息，增加显示时间
+    }
+    
+    // 检查是否为错误消息
+    const isError = message.toLowerCase().includes('错误') || 
+                   message.toLowerCase().includes('失败') || 
+                   message.toLowerCase().includes('error');
+    
     // 设置消息
     if (message) {
         toast.textContent = message;
+        
+        // 根据消息类型设置不同的样式
+        if (isError) {
+            toast.classList.add('error-toast');
+        } else {
+            toast.classList.remove('error-toast');
+        }
+        
+        // 调整最大宽度，使长消息能自动换行
+        if (message.length > 40) {
+            toast.style.maxWidth = '80%';
+        } else {
+            toast.style.maxWidth = '300px';
+        }
     }
     
     // 显示Toast
     toast.classList.remove('invisible', 'opacity-0');
     toast.classList.add('opacity-100');
     
+    // 清除之前的定时器
+    if (window.toastTimer) {
+        clearTimeout(window.toastTimer);
+    }
+    
     // 设置自动隐藏
-    setTimeout(() => {
+    window.toastTimer = setTimeout(() => {
         toast.classList.remove('opacity-100');
         toast.classList.add('opacity-0');
         
         // 等待淡出动画完成后隐藏
         setTimeout(() => {
             toast.classList.add('invisible');
+            // 重置样式
+            toast.classList.remove('error-toast');
+            toast.style.maxWidth = '';
         }, 300);
     }, duration);
 }
