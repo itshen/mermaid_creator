@@ -1,64 +1,107 @@
-/* 通用样式 */
+/* 合并后的样式文件 */
+
+/* 全局样式变量 */
 :root {
     --primary-color: #3b82f6;
-    --success-color: #10b981;
+    --primary-hover: #2563eb;
+    --success-color: #22c55e;
+    --success-hover: #16a34a;
     --danger-color: #ef4444;
     --warning-color: #f59e0b;
     --info-color: #3b82f6;
+    --border-color: #e5e7eb;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --border-radius: 0.375rem;
 }
 
-/* 编辑器自定义样式 */
+/* 移除Quill编辑器默认样式 */
+.ql-toolbar.ql-snow {
+    border-color: var(--border-color) !important;
+    border-top-left-radius: var(--border-radius);
+    border-top-right-radius: var(--border-radius);
+    background-color: #f9fafb;
+}
+
+.ql-container.ql-snow {
+    border-color: var(--border-color) !important;
+    border-top: none !important;
+    border-bottom-left-radius: var(--border-radius);
+    border-bottom-right-radius: var(--border-radius);
+    background-color: white;
+}
+
+/* Quill编辑器样式调整 */
 .ql-editor {
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    min-height: 200px;
+    max-height: calc(100% - 42px);
+    overflow-y: auto;
+    font-family: 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 14px;
-    line-height: 1.6;
+    line-height: 1.5;
+    background-color: white;
 }
 
-/* 版本列表项样式 */
-.version-item {
-    position: relative;
+/* 输入框样式 */
+#userInput {
+    font-size: 14px;
+    transition: all 0.3s ease;
 }
 
-.version-item:hover {
-    background-color: #f3f4f6;
+#userInput:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
-.version-item.active {
-    background-color: #e5edff;
-    border-left: 3px solid var(--primary-color);
+/* 按钮统一样式 */
+button {
+    transition: all 0.2s ease;
 }
 
-/* 加载动画 */
-.loading {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: white;
-    animation: spin 1s ease-in-out infinite;
+/* Mermaid语法高亮 */
+.ql-syntax-keyword {
+    color: #569cd6;
+    font-weight: bold;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
+.ql-syntax-arrow {
+    color: #d4d4d4;
+    font-weight: bold;
 }
 
-/* 标题列表样式 */
+.ql-syntax-label {
+    color: #9cdcfe;
+}
+
+.ql-syntax-bracket {
+    color: #ffd700;
+}
+
+.ql-syntax-comment {
+    color: #6a9955;
+    font-style: italic;
+}
+
+/* 标题项样式 */
 .title-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
-    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--border-radius);
     cursor: pointer;
+    transition: background-color 0.2s;
+    margin-bottom: 0.25rem;
+    border: 1px solid transparent;
 }
 
 .title-item:hover {
     background-color: #f3f4f6;
+    border-color: #e5e7eb;
 }
 
 .title-item.active {
     background-color: #e5edff;
+    font-weight: 600;
     border-left: 3px solid var(--primary-color);
 }
 
@@ -69,6 +112,7 @@
     white-space: nowrap;
 }
 
+/* 删除按钮 */
 .delete-btn {
     opacity: 0;
     transition: opacity 0.2s;
@@ -76,6 +120,61 @@
 
 .title-item:hover .delete-btn {
     opacity: 1;
+}
+
+/* 禁用状态 */
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Mermaid图表容器 */
+.mermaid {
+    text-align: center;
+    padding: 0;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+}
+
+/* 加载状态 */
+.loading {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 预览区域 */
+#preview {
+    background-color: white;
+    border-radius: var(--border-radius);
+    padding: 0;
+}
+
+#preview svg {
+    max-width: 100%;
+    height: auto;
+    background-color: white;
+    border: none;
+}
+
+/* 版本列表项样式 */
+.version-item {
+    position: relative;
+}
+
+.version-item:hover {
+    background-color: #f3f4f6;
 }
 
 /* 自定义滚动条 */

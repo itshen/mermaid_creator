@@ -14,8 +14,8 @@
     <!-- 自定义样式 -->
     <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto p-2 md:p-4 h-screen flex flex-col">
+<body class="bg-white min-h-screen">
+    <div class="max-w-[1920px] mx-auto p-2 md:p-4 h-screen flex flex-col">
         <div class="flex flex-col md:flex-row gap-4 h-full overflow-hidden">
             <!-- 侧边栏 -->
             <div class="w-full md:w-64 bg-white rounded-lg shadow p-4">
@@ -36,26 +36,26 @@
             <div class="flex-1 bg-white rounded-lg shadow p-4 flex flex-col max-h-screen overflow-auto">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex gap-2">
-                        <button id="settingsBtn" class="bg-gray-200 hover:bg-gray-300 p-2 rounded transition-colors flex items-center">
+                        <button id="settingsBtn" class="bg-gray-100 hover:bg-gray-300 p-2 rounded transition-colors flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                             <span class="hidden md:inline text-sm">系统设置</span>
                         </button>
-                        <button id="toggleVersionsBtn" class="bg-gray-200 hover:bg-gray-300 p-2 rounded transition-colors flex items-center">
+                        <button id="toggleVersionsBtn" class="bg-gray-100 hover:bg-gray-300 p-2 rounded transition-colors flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span class="hidden md:inline text-sm">版本历史</span>
                         </button>
-                        <button id="saveVersionBtn" class="bg-gray-200 hover:bg-gray-300 p-2 rounded transition-colors flex items-center gap-1" title="保存当前版本">
+                        <button id="saveVersionBtn" class="bg-gray-100 hover:bg-gray-300 p-2 rounded transition-colors flex items-center gap-1" title="保存当前版本">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                             </svg>
                             <span class="hidden md:inline text-sm">保存版本</span>
                         </button>
-                        <button id="copySvgBtn" class="bg-gray-200 hover:bg-gray-300 p-2 rounded transition-colors flex items-center">
+                        <button id="copySvgBtn" class="bg-gray-100 hover:bg-gray-300 p-2 rounded transition-colors flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
@@ -66,7 +66,7 @@
                 </div>
                 
                 <!-- 用户回复显示区 -->
-                <div class="bg-gray-50 p-3 mb-4 rounded-md border border-gray-200 flex items-center">
+                <div class="bg-white p-3 mb-4 rounded-md border border-gray-200 flex items-center">
                     <div id="lastUserInput" class="flex-1 truncate text-gray-700 h-full" title="点击右侧图标复制完整内容" style="max-height: 3em; overflow-y: auto;"></div>
                     <button id="copyLastInputBtn" class="ml-2 text-blue-500 hover:text-blue-700 flex items-center flex-shrink-0" title="复制到剪贴板">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,10 +78,10 @@
                 <!-- 编辑器和预览区容器 -->
                 <div class="flex flex-col lg:flex-row gap-4 mb-4 flex-grow overflow-hidden">
                     <!-- 编辑器 -->
-                    <div id="editor-container" class="lg:w-1/2 h-1/2 lg:h-full border rounded-md min-h-[150px] flex-shrink-0"></div>
+                    <div id="editor-container" class="lg:w-3/5 h-1/2 lg:h-full border rounded-md min-h-[150px] flex-shrink-0"></div>
                     
                     <!-- 预览 -->
-                    <div id="preview" class="lg:w-1/2 h-1/2 lg:h-full border rounded-md p-4 bg-gray-50 overflow-auto flex-shrink-0"></div>
+                    <div id="preview" class="lg:w-2/5 h-1/2 lg:h-full border rounded-md p-0 bg-white overflow-auto flex-shrink-0"></div>
                 </div>
                 
                 <!-- 输入框 -->
@@ -144,6 +144,33 @@
                             <li>输入描述，AI自动生成Mermaid图表</li>
                             <li>支持手动编辑和调整图表代码</li>
                             <li>实时预览，所见即所得</li>
+                            <li>点击"示例图表"按钮可查看各种图表示例</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h4 class="font-semibold text-blue-500">📊 支持的图表类型</h4>
+                        <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1 mt-1">
+                            <li><span class="font-medium">流程图 (Flowchart)</span> - 展示工作流程、算法或过程</li>
+                            <li><span class="font-medium">时序图 (Sequence Diagram)</span> - 展示对象间交互的时间序列</li>
+                            <li><span class="font-medium">类图 (Class Diagram)</span> - 展示面向对象系统的结构</li>
+                            <li><span class="font-medium">甘特图 (Gantt)</span> - 展示项目时间表和进度</li>
+                            <li><span class="font-medium">饼图 (Pie Chart)</span> - 展示比例数据</li>
+                            <li><span class="font-medium">象限图 (Quadrant Chart)</span> - 适合优先级或决策分析</li>
+                            <li><span class="font-medium">Git图 (Gitgraph)</span> - 展示Git提交和分支历史</li>
+                            <li><span class="font-medium">雷达图 (Radar Chart)</span> - 展示多变量数据比较</li>
+                            <li><span class="font-medium">其他</span> - 状态图、实体关系图、思维导图等</li>
+                        </ul>
+                        <p class="text-xs text-gray-500 mt-2">提示：可通过点击"示例图表"按钮查看各类图表的实际示例</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h4 class="font-semibold text-blue-500">💡 使用技巧</h4>
+                        <ul class="list-disc pl-5 text-sm text-gray-600 space-y-1 mt-1">
+                            <li><span class="font-medium">明确指定图表类型</span> - 例如"生成一个显示数据流程的流程图"</li>
+                            <li><span class="font-medium">提供具体细节</span> - 包括关键节点、关系、条件和结果</li>
+                            <li><span class="font-medium">指定特殊需求</span> - 如节点形状、布局方向、颜色等</li>
+                            <li><span class="font-medium">参考示例修改</span> - 可加载示例后修改以适应你的需求</li>
                         </ul>
                     </div>
                     

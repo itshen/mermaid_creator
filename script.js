@@ -1,11 +1,17 @@
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
+    // 设置页面背景色为浅灰色
+    document.body.style.backgroundColor = '#f8f8f8';
+    
     // 初始化Mermaid
     mermaid.initialize({
         startOnLoad: true,
         theme: 'default',
         securityLevel: 'loose',
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        themeVariables: {
+            background: '#ffffff'
+        }
     });
 
     // 设置输入框placeholder，根据操作系统区分
@@ -50,23 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateLastUserInput(lastUserMessage.content);
             }
         }
-    } else {
-        // 如果没有活跃的对话，显示示例图表
-        const exampleMermaidCode = `graph TD
-    A[开始] --> B{是否有API Key?}
-    B -->|是| C[发送请求到AI]
-    B -->|否| D[显示设置页面]
-    C --> E[更新预览]
-    D --> F[保存API Key]
-    F --> C
-    E --> G[下载SVG]
-    G --> H[结束]`;
-        
-        quill.setText(exampleMermaidCode);
-        updateMermaidPreview(exampleMermaidCode);
-        
-        // 顶部用户输入显示设置为系统使用说明
-        updateLastUserInput('系统使用说明');
     }
 
     // 设置按钮事件
@@ -747,6 +736,12 @@ function loadConversations() {
     // 清空列表
     titleList.innerHTML = '';
     
+    // 如果没有对话，创建示例图表对话
+    if (conversations.length === 0) {
+        createExampleConversations();
+        return; // 会通过createExampleConversations重新调用loadConversations
+    }
+    
     // 按创建时间逆序排序
     conversations.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     
@@ -1129,4 +1124,359 @@ function closeSaveVersionDialog() {
     setTimeout(() => {
         saveVersionDialog.classList.add('hidden');
     }, 300);
+}
+
+// 显示示例图表菜单 - 修改为只显示卡片界面，不直接加载示例
+function displayExamples() {
+    // 确保至少有一个对话
+    const conversations = getConversations();
+    if (conversations.length === 0) {
+        createExampleConversations();
+        return;
+    }
+    
+    const preview = document.getElementById('preview');
+    const examples = loadExamples();
+    
+    // 创建示例选择界面
+    let examplesHtml = `
+    <div class="examples-container p-4">
+        <h2 class="text-xl font-bold mb-4">选择一个示例图表</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    `;
+    
+    // 添加每个示例的卡片
+    Object.keys(examples).forEach(key => {
+        const example = examples[key];
+        examplesHtml += `
+        <div class="example-card border rounded-lg overflow-hidden hover:shadow-lg transition-shadow cursor-pointer" data-type="${key}">
+            <div class="p-3 bg-gray-50 border-b">
+                <h3 class="font-medium">${example.name}</h3>
+            </div>
+            <div class="p-3 text-sm text-gray-600">
+                点击加载 ${key} 类型的示例
+            </div>
+        </div>
+        `;
+    });
+    
+    examplesHtml += `
+        </div>
+    </div>
+    `;
+    
+    // 显示示例选择界面
+    preview.innerHTML = examplesHtml;
+    
+    // 为每个示例卡片添加点击事件
+    document.querySelectorAll('.example-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const type = card.getAttribute('data-type');
+            const example = examples[type];
+            
+            if (example) {
+                // 更新编辑器内容
+                const quill = Quill.find(document.getElementById('editor-container'));
+                if (quill) {
+                    // 临时移除事件监听器
+                    quill.off('text-change');
+                    
+                    // 更新编辑器内容
+                    quill.setText(example.code);
+                    
+                    // 更新预览
+                    updateMermaidPreview(example.code);
+                    
+                    // 更新用户输入显示
+                    updateLastUserInput(example.name);
+                    
+                    // 重新添加事件监听器
+                    setTimeout(() => {
+                        addEditorEventListener(quill);
+                    }, 50);
+                }
+            }
+        });
+    });
+}
+
+// 创建示例图表对话
+function createExampleConversations() {
+    const examples = loadExamples();
+    
+    // 创建系统使用说明示例
+    const tutorialId = Date.now().toString();
+    const tutorialCode = `graph TD
+    A[开始] --> B{是否有API Key?}
+    B -->|是| C[发送请求到AI]
+    B -->|否| D[显示设置页面]
+    C --> E[更新预览]
+    D --> F[保存API Key]
+    F --> C
+    E --> G[下载SVG]
+    G --> H[结束]`;
+    
+    const tutorialConversation = {
+        id: tutorialId,
+        title: '系统使用说明',
+        messages: [
+            {
+                role: 'user',
+                content: '系统使用说明'
+            },
+            {
+                role: 'assistant',
+                content: '```mermaid\n' + tutorialCode + '\n```'
+            }
+        ],
+        createdAt: new Date().toISOString(),
+        versions: [{
+            id: Date.now().toString() + '1',
+            name: '系统使用说明',
+            prompt: '系统使用说明',
+            code: tutorialCode,
+            createdAt: new Date().toISOString()
+        }]
+    };
+    
+    // 创建保存所有示例对话的数组
+    const exampleConversations = [tutorialConversation];
+    
+    // 为每个示例创建对话
+    Object.keys(examples).forEach((key, index) => {
+        const example = examples[key];
+        const exampleId = (Date.now() + index + 1).toString();
+        
+        const exampleConversation = {
+            id: exampleId,
+            title: example.name,
+            messages: [
+                {
+                    role: 'user',
+                    content: example.name
+                },
+                {
+                    role: 'assistant',
+                    content: '```mermaid\n' + example.code + '\n```'
+                }
+            ],
+            createdAt: new Date(Date.now() - (index + 1) * 60000).toISOString(), // 错开创建时间
+            versions: [{
+                id: exampleId + 'v1',
+                name: example.name,
+                prompt: example.name,
+                code: example.code,
+                createdAt: new Date(Date.now() - (index + 1) * 60000).toISOString()
+            }]
+        };
+        
+        exampleConversations.push(exampleConversation);
+    });
+    
+    // 保存示例对话到localStorage
+    localStorage.setItem('conversations', JSON.stringify(exampleConversations));
+    
+    // 设置系统使用说明为活跃对话
+    localStorage.setItem('activeConversationId', tutorialId);
+    
+    // 重新加载对话列表
+    loadConversations();
+    
+    // 加载系统使用说明对话内容
+    loadConversation(tutorialId);
+}
+
+// 加载示例图表
+function loadExamples() {
+    // 示例图表集合
+    const examples = {
+        flowchart: {
+            name: "科研项目流程图",
+            code: `graph TD
+    A[开始研究] --> B{文献综述}
+    B -->|发现研究空白| C[提出研究问题]
+    B -->|已有相似研究| D[寻找创新点]
+    C --> E[设计实验方案]
+    D --> E
+    E --> F[准备实验材料]
+    F --> G[执行实验]
+    G --> H{数据分析}
+    H -->|结果显著| I[撰写论文]
+    H -->|结果不显著| J[修改实验方案]
+    J --> F
+    I --> K[投稿期刊]
+    K --> L{审稿结果}
+    L -->|接收| M[论文发表]
+    L -->|修改后接收| N[根据意见修改]
+    L -->|拒绝| O[投递其他期刊]
+    N --> K
+    O --> K
+    M --> P[结束]`
+        },
+        sequenceDiagram: {
+            name: "会议组织时序图",
+            code: `sequenceDiagram
+    participant 组织者
+    participant 与会者
+    participant 技术支持
+    participant 场地
+    
+    组织者->>组织者: 确定会议主题与日期
+    组织者->>场地: 预订会议室
+    场地-->>组织者: 确认预订
+    组织者->>与会者: 发送会议邀请
+    与会者-->>组织者: 确认参加
+    
+    组织者->>技术支持: 申请设备支持
+    技术支持-->>组织者: 确认支持
+    
+    Note right of 组织者: 会议准备阶段
+    
+    组织者->>与会者: 发送会议议程
+    组织者->>组织者: 准备会议材料
+    
+    Note right of 组织者: 会议当天
+    
+    技术支持->>场地: 设置设备
+    技术支持-->>组织者: 设备就绪
+    与会者->>场地: 到达会议室
+    组织者->>与会者: 开始会议
+    
+    组织者->>与会者: 会议总结
+    组织者->>与会者: 发送会议记录
+    与会者-->>组织者: 反馈意见`
+        },
+        classDiagram: {
+            name: "研究数据结构类图",
+            code: `classDiagram
+    class 研究项目 {
+        +String 项目名称
+        +Date 开始日期
+        +Date 结束日期
+        +Float 经费预算
+        +获取进度()
+        +计算剩余经费()
+    }
+    
+    class 研究人员 {
+        +String 姓名
+        +String 职称
+        +String 专业领域
+        +添加发表论文()
+        +计算H指数()
+    }
+    
+    class 实验数据 {
+        +Date 采集日期
+        +String 实验条件
+        +Float[] 原始数据
+        +分析数据()
+        +导出图表()
+    }
+    
+    class 论文 {
+        +String 标题
+        +String[] 作者列表
+        +String 期刊名称
+        +Date 发表日期
+        +获取引用次数()
+    }
+    
+    研究项目 "1" *-- "多" 研究人员 : 包含
+    研究项目 "1" *-- "多" 实验数据 : 产生
+    研究人员 "多" -- "多" 论文 : 发表
+    实验数据 "多" -- "多" 论文 : 支持`
+        },
+        animalClass: {
+            name: "动物类层次结构",
+            code: `classDiagram
+    class 动物 {
+        +String 名称
+        +int 年龄
+        +float 体重
+        +String 栖息地
+        +进食()
+        +移动()
+        +休息()
+        +繁殖()
+    }
+    
+    class 哺乳动物 {
+        +float 体温
+        +int 妊娠期
+        +哺乳()
+        +保持体温()
+    }
+    
+    class 鸟类 {
+        +float 翼展
+        +String 羽毛颜色
+        +飞行()
+        +筑巢()
+        +鸣叫()
+    }
+    
+    class 爬行动物 {
+        +bool 是否有鳞片
+        +bool 冷血
+        +蜕皮()
+        +晒太阳()
+    }
+    
+    class 猫科动物 {
+        -int 爪子数量
+        +bool 夜视能力
+        +捕猎()
+        +攀爬()
+    }
+    
+    class 犬科动物 {
+        +int 嗅觉灵敏度
+        +String 社会结构
+        +嗅探()
+        +吠叫()
+    }
+    
+    动物 <|-- 哺乳动物
+    动物 <|-- 鸟类
+    动物 <|-- 爬行动物
+    哺乳动物 <|-- 猫科动物
+    哺乳动物 <|-- 犬科动物
+    
+    猫科动物 : +示例：狮子、老虎、家猫
+    犬科动物 : +示例：狼、狐狸、家犬`
+        },
+        pie: {
+            name: "研究经费分配饼图",
+            code: `pie title 2023年度科研项目经费分配
+    "设备购置" : 45.2
+    "人员工资" : 30.0
+    "材料费" : 15.5
+    "会议差旅" : 5.0
+    "出版费" : 3.0
+    "其他" : 1.3`
+        },
+        radar: {
+            name: "通义千问发展时间线",
+            code: `timeline
+    title 通义千问(Qwen)发展时间线
+    section 2023年
+      2023年9月 : Qwen
+    section 2024年上半年
+      2024年2月 : Qwen1.5
+      2024年3月 : Qwen1.5-MoE
+      2024年4月 : Qwen1.5-110B
+      2024年5月 : Qwen-Max
+      2024年6月 : Qwen2
+    section 2024年下半年
+      2024年8月 : Qwen2-VL/Audio/Math
+      2024年9月 : Qwen2.5
+      2024年11月 : QwQ
+    section 2025年
+      2025年3月 : Qwen2.5-Omni
+      2025年4月 : Qwen3`
+        }
+    };
+
+    return examples;
 } 
