@@ -499,7 +499,7 @@ function toggleInputState(enabled, quill) {
         setTimeout(() => {
             if (sendBtn.disabled) {
                 toggleInputState(true, quill);
-                alert('请求超时，已恢复输入状态');
+                //showToast('请求超时，已恢复输入状态', 3000);
             }
         }, 120000); // 2分钟超时
     }
@@ -1341,9 +1341,9 @@ function loadConversations() {
         // 点击删除按钮删除对话
         li.querySelector('.delete-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            if (confirm(`确定要删除对话 "${conv.title}" 吗？`)) {
-                deleteConversation(conv.id);
-            }
+            // 删除确认逻辑
+            deleteConversation(conv.id);
+            showToast(`已删除对话 "${conv.title}"`, 2000);
         });
         
         titleList.appendChild(li);
