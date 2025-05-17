@@ -614,16 +614,21 @@ async function sendToAI(userInput, currentMermaidCode) {
     // 确保发送前检查并去除重复的消息
     messages = deduplicateMessages(messages);
 
-    // 使用本地代理服务器发送请求
-    const response = await fetch('/proxy/qwen', {
+    // 直接请求通义千问 API
+    const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            api_key: apiKey,
             model: 'qwen-plus',
-            messages: messages
+            input: {
+                messages: messages
+            },
+            parameters: {
+                result_format: 'message'
+            }
         })
     });
 
@@ -634,7 +639,7 @@ async function sendToAI(userInput, currentMermaidCode) {
     }
 
     const data = await response.json();
-    // 适配新版API响应格式
+    // 适配通义千问 API 响应格式
     const content = data.output && data.output.choices && data.output.choices[0] && 
                     data.output.choices[0].message && data.output.choices[0].message.content || '';
     
