@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 添加修复状态标志
     window.isFixingMermaid = false;
+    // 添加Mermaid初始化标志
+    window.isMermaidInitialized = false;
     
     // 初始化Mermaid
     mermaid.initialize({
@@ -16,6 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
             background: '#ffffff'
         }
     });
+    
+    // 在Mermaid初始化后设置标志
+    setTimeout(() => {
+        window.isMermaidInitialized = true;
+        console.log('Mermaid初始化完成');
+    }, 200);
 
     // 添加错误Toast的CSS样式
     const style = document.createElement('style');
@@ -55,27 +63,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedApiKey = localStorage.getItem('qwenApiKey') || '';
     document.getElementById('apiKey').value = savedApiKey;
 
-    // 检查并确保有示例对话
-    checkAndResetConversations();
-    
-    // 加载对话历史
-    loadConversations();
-    
-    // 获取活跃的对话ID
-    const activeId = localStorage.getItem('activeConversationId');
-    if (activeId) {
-        // 如果有活跃的对话，加载该对话的最后一个图表和最后一条用户消息
-        const conversation = loadConversation(activeId);
+    // 延迟初始化，确保Mermaid库已加载
+    setTimeout(() => {
+        // 检查并确保有示例对话
+        checkAndResetConversations();
         
-        // 确保加载最后一条用户消息到顶部显示区
-        if (conversation && conversation.messages && conversation.messages.length > 0) {
-            const userMessages = conversation.messages.filter(msg => msg.role === 'user');
-            if (userMessages.length > 0) {
-                const lastUserMessage = userMessages[userMessages.length - 1];
-                updateLastUserInput(lastUserMessage.content);
-            }
+        // 加载对话历史
+        loadConversations();
+        
+        // 获取活跃的对话ID
+        const activeId = localStorage.getItem('activeConversationId');
+        if (activeId) {
+            // 如果有活跃的对话，延迟加载该对话的最后一个图表和最后一条用户消息
+            setTimeout(() => {
+                const conversation = loadConversation(activeId);
+                
+                // 确保加载最后一条用户消息到顶部显示区
+                if (conversation && conversation.messages && conversation.messages.length > 0) {
+                    const userMessages = conversation.messages.filter(msg => msg.role === 'user');
+                    if (userMessages.length > 0) {
+                        const lastUserMessage = userMessages[userMessages.length - 1];
+                        updateLastUserInput(lastUserMessage.content);
+                    }
+                }
+            }, 300);
         }
-    }
+    }, 500);
 
     // 设置按钮事件
     setupEventListeners(quill);
@@ -102,6 +115,9 @@ function setupEventListeners(quill) {
 
     // SVG下载按钮
     const copySvgBtn = document.getElementById('copySvgBtn');
+    
+    // 添加PNG下载按钮
+    const copyPngBtn = document.getElementById('copyPngBtn');
     
     // 版本抽屉相关
     const versionsDrawer = document.getElementById('versionsDrawer');
@@ -380,6 +396,24 @@ function setupEventListeners(quill) {
             showToast('下载SVG失败：' + err.message, 3000);
         }
     });
+    
+    // 下载PNG按钮事件
+    if (copyPngBtn) {
+        copyPngBtn.addEventListener('click', () => {
+            console.log('PNG下载按钮被点击');
+            const svgElement = document.querySelector('#preview svg');
+            console.log('获取到的SVG元素:', svgElement);
+            if (!svgElement) {
+                console.error('找不到SVG元素');
+                alert('没有可供下载的图表');
+                return;
+            }
+            
+            console.log('调用showPngSizeDialog');
+            // 显示尺寸输入对话框
+            showPngSizeDialog(svgElement);
+        });
+    }
     
     // 复制代码按钮事件
     copyCodeBtn.addEventListener('click', () => {
@@ -713,6 +747,19 @@ function extractMermaidCode(response) {
 // 更新Mermaid预览
 function updateMermaidPreview(code, retryCount = 0) {
     const previewDiv = document.getElementById('preview');
+    
+    // 检查Mermaid是否初始化完成
+    if (!window.isMermaidInitialized) {
+        console.log('Mermaid尚未完成初始化，延迟渲染');
+        previewDiv.innerHTML = `<div class="p-4 text-gray-500">正在等待Mermaid初始化...</div>`;
+        
+        // 延迟重试
+        setTimeout(() => {
+            updateMermaidPreview(code, retryCount);
+        }, 300);
+        return;
+    }
+    
     previewDiv.innerHTML = `<div class="mermaid">${code}</div>`;
     
     try {
@@ -1387,13 +1434,21 @@ function loadConversation(id) {
                 
                 quill.setText(mermaidCode);
                 
-                // 更新预览
-                updateMermaidPreview(mermaidCode);
+                // 延迟更新预览，确保Mermaid库已初始化完成
+                const previewDiv = document.getElementById('preview');
+                // 先清空预览区域，避免在Mermaid初始化前显示错误代码
+                previewDiv.innerHTML = '<div class="p-4 text-gray-500">正在准备预览...</div>';
+                
+                // 延迟渲染，确保Mermaid库有足够时间初始化
+                setTimeout(() => {
+                    // 更新预览
+                    updateMermaidPreview(mermaidCode);
+                }, 300);
                 
                 // 重新添加事件监听器
                 setTimeout(() => {
                     addEditorEventListener(quill);
-                }, 50);
+                }, 500);
             }
         }
     }
@@ -1555,8 +1610,16 @@ function loadVersion(version) {
     // 更新编辑器内容
     quill.setText(version.code);
     
-    // 更新预览
-    updateMermaidPreview(version.code);
+    // 延迟更新预览，确保Mermaid库已初始化完成
+    const previewDiv = document.getElementById('preview');
+    // 先清空预览区域，避免在Mermaid初始化前显示错误代码
+    previewDiv.innerHTML = '<div class="p-4 text-gray-500">正在准备预览...</div>';
+    
+    // 延迟渲染，确保Mermaid库有足够时间初始化
+    setTimeout(() => {
+        // 更新预览
+        updateMermaidPreview(version.code);
+    }, 300);
     
     // 更新最后用户输入显示
     updateLastUserInput(version.prompt);
@@ -1564,7 +1627,7 @@ function loadVersion(version) {
     // 重新添加事件监听器
     setTimeout(() => {
         addEditorEventListener(quill);
-    }, 50);
+    }, 500);
     
     // 标记当前加载的版本，而不是直接删除该版本之后的历史
     const activeConversationId = localStorage.getItem('activeConversationId');
@@ -1777,8 +1840,10 @@ function createExampleConversations() {
     // 系统消息模板
     const systemPrompt = '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。';
     
-    // 创建系统使用说明示例
+    // 创建系统使用说明示例 - 确保语法完全正确
     const tutorialId = Date.now().toString();
+    
+    // 简化的流程图示例，减少出错可能性
     const tutorialCode = `graph TD
     A[开始] --> B{是否有API Key?}
     B -->|是| C[发送请求到AI]
@@ -1786,7 +1851,7 @@ function createExampleConversations() {
     C --> E[更新预览]
     D --> F[保存API Key]
     F --> C
-    E --> G[下载SVG]
+    E --> G[下载图表]
     G --> H[结束]`;
     
     const tutorialConversation = {
@@ -1822,9 +1887,14 @@ function createExampleConversations() {
     // 创建保存所有示例对话的数组
     const exampleConversations = [tutorialConversation];
     
-    // 为每个示例创建对话
-    Object.keys(examples).forEach((key, index) => {
+    // 为每个示例创建对话 - 只添加几个简单的例子，降低首次加载的复杂度
+    // 选择几个较为简单的图表类型
+    const simpleExampleKeys = ['flowchart', 'pie'];
+    
+    simpleExampleKeys.forEach((key, index) => {
         const example = examples[key];
+        if (!example) return;
+        
         const exampleId = (Date.now() + index + 1).toString();
         const exampleTime = new Date(Date.now() - (index + 1) * 60000).toISOString(); // 错开时间
         
@@ -1870,8 +1940,10 @@ function createExampleConversations() {
     // 重新加载对话列表
     loadConversations();
     
-    // 加载系统使用说明对话内容
-    loadConversation(tutorialId);
+    // 使用延迟加载系统使用说明对话内容，确保Mermaid有足够时间初始化
+    setTimeout(() => {
+        loadConversation(tutorialId);
+    }, 500);
     
     // 设置已经看过示例的标记
     localStorage.setItem('hasSeenExamples', 'true');
@@ -2086,4 +2158,204 @@ function checkAndResetConversations() {
         return true;
     }
     return false;
+}
+
+// 显示PNG尺寸输入对话框
+function showPngSizeDialog(svgElement) {
+    console.log('进入showPngSizeDialog函数');
+    console.log('SVG元素:', svgElement);
+    
+    try {
+        // 获取SVG原始尺寸
+        const svgWidth = svgElement.viewBox.baseVal.width || svgElement.width.baseVal.value;
+        const svgHeight = svgElement.viewBox.baseVal.height || svgElement.height.baseVal.value;
+        
+        console.log('获取到的SVG尺寸:', {width: svgWidth, height: svgHeight});
+        
+        // 计算宽高比
+        const aspectRatio = svgHeight / svgWidth;
+        console.log('宽高比:', aspectRatio);
+        
+        // 默认宽度
+        const defaultWidth = 4096;
+        const defaultHeight = Math.round(defaultWidth * aspectRatio);
+        
+        // 创建对话框
+        const dialog = document.createElement('div');
+        dialog.className = 'fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50';
+        dialog.innerHTML = `
+            <div class="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+                <h3 class="text-lg font-medium mb-4">设置PNG导出尺寸</h3>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">宽度 (像素)</label>
+                    <input type="number" id="png-width" class="w-full p-2 border rounded" value="${defaultWidth}" min="100" max="8192">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">高度 (像素)</label>
+                    <input type="number" id="png-height" class="w-full p-2 border rounded" value="${defaultHeight}" min="100" max="8192">
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center text-sm font-medium text-gray-700">
+                        <input type="checkbox" id="maintain-ratio" class="mr-2" checked>
+                        保持宽高比
+                    </label>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancel-png" class="px-4 py-2 border rounded hover:bg-gray-100">取消</button>
+                    <button id="confirm-png" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">下载</button>
+                </div>
+            </div>
+        `;
+        
+        // 添加到DOM
+        document.body.appendChild(dialog);
+        
+        // 获取输入元素
+        const widthInput = document.getElementById('png-width');
+        const heightInput = document.getElementById('png-height');
+        const maintainRatioCheckbox = document.getElementById('maintain-ratio');
+        const cancelButton = document.getElementById('cancel-png');
+        const confirmButton = document.getElementById('confirm-png');
+        
+        // 保持宽高比的计算函数
+        const updateHeight = () => {
+            if (maintainRatioCheckbox.checked) {
+                const width = parseFloat(widthInput.value);
+                heightInput.value = Math.round(width * aspectRatio);
+            }
+        };
+        
+        const updateWidth = () => {
+            if (maintainRatioCheckbox.checked) {
+                const height = parseFloat(heightInput.value);
+                widthInput.value = Math.round(height / aspectRatio);
+            }
+        };
+        
+        // 添加事件监听器
+        widthInput.addEventListener('input', updateHeight);
+        heightInput.addEventListener('input', updateWidth);
+        
+        // 取消按钮
+        cancelButton.addEventListener('click', () => {
+            document.body.removeChild(dialog);
+        });
+        
+        // 确认按钮
+        confirmButton.addEventListener('click', () => {
+            const width = parseInt(widthInput.value, 10);
+            const height = parseInt(heightInput.value, 10);
+            
+            // 验证输入
+            if (isNaN(width) || isNaN(height) || width < 100 || height < 100) {
+                showToast('请输入有效的尺寸（至少100像素）', 3000);
+                return;
+            }
+            
+            // 清除对话框
+            document.body.removeChild(dialog);
+            
+            // 下载PNG
+            downloadSvgAsPng(svgElement, width, height);
+        });
+    } catch (error) {
+        console.error('显示PNG尺寸输入对话框时出错:', error);
+        showToast('显示PNG尺寸输入对话框时出错：' + error.message, 3000);
+    }
+}
+
+// 将SVG转换为PNG并下载
+function downloadSvgAsPng(svgElement, width, height) {
+    console.log('进入downloadSvgAsPng函数, 参数:', {width, height});
+    console.log('SVG元素:', svgElement);
+    
+    try {
+        // 显示加载提示
+        showToast('正在生成PNG，请稍候...', 3000);
+        
+        // 获取SVG数据并添加跨域使用标记
+        let svgData = new XMLSerializer().serializeToString(svgElement);
+        
+        // 确保SVG包含了必要的xmlns属性
+        if (!svgData.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            svgData = svgData.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        
+        console.log('SVG数据已处理，长度:', svgData.length);
+        
+        // 使用内联数据URL而不是Blob URL
+        const svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+        console.log('创建SVG Data URL');
+        
+        // 创建图像
+        const img = new Image();
+        console.log('创建Image对象');
+        
+        img.onload = function() {
+            console.log('图像加载完成');
+            try {
+                // 创建canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                console.log('创建Canvas, 尺寸:', {width: canvas.width, height: canvas.height});
+                
+                // 获取绘图上下文
+                const ctx = canvas.getContext('2d');
+                console.log('获取绘图上下文:', ctx ? '成功' : '失败');
+                
+                // 设置白色背景
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, width, height);
+                
+                // 绘制SVG
+                ctx.drawImage(img, 0, 0, width, height);
+                console.log('绘制图像到Canvas完成');
+                
+                // 直接使用toDataURL而不是toBlob
+                try {
+                    console.log('使用toDataURL代替toBlob');
+                    const dataUrl = canvas.toDataURL('image/png');
+                    console.log('Canvas转换为DataURL完成, 长度:', dataUrl.length);
+                    
+                    // 创建下载链接
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = dataUrl;
+                    downloadLink.download = 'mermaid_diagram_' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+                    console.log('创建下载链接, download属性:', downloadLink.download);
+                    
+                    document.body.appendChild(downloadLink);
+                    console.log('添加下载链接到DOM');
+                    
+                    downloadLink.click();
+                    console.log('触发下载链接点击');
+                    
+                    document.body.removeChild(downloadLink);
+                    console.log('从DOM移除下载链接');
+                    
+                    // 显示成功提示
+                    showToast('PNG图表已开始下载');
+                } catch (dataUrlError) {
+                    console.error('使用toDataURL出错:', dataUrlError);
+                    showToast('导出PNG失败: ' + dataUrlError.message, 3000);
+                }
+            } catch (err) {
+                console.error('PNG转换过程中出错：', err);
+                showToast('PNG转换失败：' + err.message, 3000);
+            }
+        };
+        
+        img.onerror = function(error) {
+            console.error('加载SVG图像失败:', error);
+            showToast('加载SVG失败，无法生成PNG', 3000);
+        };
+        
+        console.log('设置img.src');
+        img.src = svgUrl;
+        console.log('已设置img.src, 等待onload事件');
+        
+    } catch (err) {
+        console.error('下载PNG失败：', err);
+        showToast('下载PNG失败：' + err.message, 3000);
+    }
 }
