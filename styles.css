@@ -236,4 +236,203 @@ button {
     .diff-left, .diff-right {
         width: 100%;
     }
+}
+
+/* 元素高亮样式 */
+/* 预览区元素高亮 - 使用紫蓝渐变的精致效果 */
+.mermaid .node.highlighted > rect,
+.mermaid .node.highlighted > polygon,
+.mermaid .node.highlighted > circle,
+.mermaid .node.highlighted > ellipse,
+.mermaid .highlighted > rect,
+.mermaid .highlighted > polygon,
+.mermaid .highlighted > circle,
+.mermaid .highlighted > ellipse {
+    stroke: url(#highlight-gradient) !important;
+    stroke-width: 2px !important;
+    filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.3));
+    transition: all 0.3s ease;
+}
+
+/* 为SVG创建渐变定义 */
+.mermaid svg:first-child {
+    position: relative;
+}
+
+/* 编辑器行高亮 - 使用更柔和的紫色调 */
+.ql-editor .line-highlight {
+    background: linear-gradient(to right, 
+        rgba(139, 92, 246, 0.08), 
+        rgba(59, 130, 246, 0.08));
+    border-left: 2px solid;
+    border-image: linear-gradient(to bottom, #8b5cf6, #3b82f6) 1;
+    margin-left: -2px;
+    padding-left: 2px;
+    transition: all 0.3s ease;
+}
+
+/* 连接线高亮 - 使用渐变效果 */
+.mermaid .edgePath.highlighted path {
+    stroke: url(#highlight-gradient) !important;
+    stroke-width: 1.5px !important;
+    opacity: 0.8;
+}
+
+/* 悬停效果增强 */
+.mermaid .node:hover {
+    cursor: pointer;
+    filter: brightness(1.05);
+}
+
+/* 高亮时的动画效果 */
+@keyframes highlight-pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 0.9; }
+    100% { opacity: 0.6; }
+}
+
+.mermaid .node.highlighted::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: inherit;
+    background: linear-gradient(45deg, 
+        rgba(139, 92, 246, 0.2), 
+        rgba(59, 130, 246, 0.2));
+    animation: highlight-pulse 2s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* AI编辑按钮样式 */
+.ai-edit-button {
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid transparent;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 1000;
+    color: #8b5cf6;
+}
+
+.ai-edit-button:hover {
+    transform: scale(1.1);
+    border: 2px solid #8b5cf6;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.ai-edit-button svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* AI编辑输入框样式 */
+.ai-edit-input {
+    width: 300px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    z-index: 1001;
+    font-size: 14px;
+}
+
+.ai-edit-header {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+}
+
+.ai-edit-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.ai-edit-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.ai-edit-textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px 16px;
+    border: none;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.ai-edit-textarea:focus {
+    outline: none;
+}
+
+.ai-edit-actions {
+    padding: 12px 16px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #e9ecef;
+}
+
+.ai-edit-actions button {
+    padding: 6px 16px;
+    border-radius: 4px;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ai-edit-cancel {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.ai-edit-cancel:hover {
+    background: #dee2e6;
+}
+
+.ai-edit-submit {
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+    color: white;
+}
+
+.ai-edit-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+/* 错误Toast样式 */
+#toast.error-toast {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    border-left: 4px solid #dc2626;
+    box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.1), 0 2px 4px -1px rgba(220, 38, 38, 0.06);
+    font-weight: 500;
 } 

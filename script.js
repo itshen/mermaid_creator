@@ -25,19 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Mermaid初始化完成');
     }, 200);
 
-    // 添加错误Toast的CSS样式
-    const style = document.createElement('style');
-    style.textContent = `
-        #toast.error-toast {
-            background-color: #fee2e2;
-            color: #b91c1c;
-            border-left: 4px solid #dc2626;
-            box-shadow: 0 4px 6px -1px rgba(220, 38, 38, 0.1), 0 2px 4px -1px rgba(220, 38, 38, 0.06);
-            font-weight: 500;
-        }
-    `;
-    document.head.appendChild(style);
-    
     // 设置输入框placeholder，根据操作系统区分
     const userInput = document.getElementById('userInput');
     if (userInput) {
@@ -331,7 +318,12 @@ function setupEventListeners(quill) {
                         
                         // 将当前响应自动添加为新版本
                         const versionName = ` ${input.substring(0, 20)}${input.length > 20 ? '...' : ''}`;
-                        addVersion(conversation, versionName, input, mermaidCode);
+                        const newVersion = addVersion(conversation, versionName, input, mermaidCode);
+                        
+                        // 将新版本设置为当前版本
+                        if (newVersion) {
+                            conversation.currentVersionId = newVersion.id;
+                        }
                         
                         // 保存回对话历史（由于已经触发过历史修剪，这里不再重复修剪）
                         updateConversation(activeConversationId, conversation, false);
@@ -490,16 +482,60 @@ function setupEventListeners(quill) {
     });
 }
 
-// 添加编辑器事件监听器，抽离为独立函数便于重用
+// 修改addEditorEventListener函数，添加高亮功能
 function addEditorEventListener(quill) {
     // 移除之前的监听器以防重复
     quill.off('text-change');
     
+    // 设置元素高亮功能
+    const highlightManager = setupElementHighlight(quill);
+    
+    // 添加防抖函数
+    let saveTimeout = null;
+    const debouncedSave = (text) => {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+        }
+        saveTimeout = setTimeout(() => {
+            // 自动保存到当前对话
+            const activeConversationId = localStorage.getItem('activeConversationId');
+            if (activeConversationId) {
+                const conversation = getConversation(activeConversationId);
+                if (conversation) {
+                    // 创建或更新手动编辑版本
+                    const versionName = `手动编辑`;
+                    const savedVersion = addVersion(conversation, versionName, '手动编辑', text);
+                    
+                    if (savedVersion) {
+                        // 设置为当前版本
+                        conversation.currentVersionId = savedVersion.id;
+                        
+                        // 保存对话
+                        updateConversation(activeConversationId, conversation, false);
+                        
+                        // 更新版本列表
+                        loadVersions();
+                        
+                        // 显示保存成功提示
+                        showToast('手动编辑已自动保存', 1500);
+                        
+                        console.log('自动保存成功');
+                    }
+                }
+            }
+        }, 1000); // 1秒后自动保存
+    };
+    
     // 添加新的监听器
-    quill.on('text-change', () => {
+    quill.on('text-change', (delta, oldDelta, source) => {
         const text = quill.getText().trim();
         if (text) {
             updateMermaidPreview(text);
+            
+            // 如果是用户输入（不是程序设置），则触发自动保存
+            if (source === 'user') {
+                debouncedSave(text);
+            }
         } else {
             // 清空预览区域，避免空内容触发mermaid错误
             document.getElementById('preview').innerHTML = '';
@@ -560,12 +596,12 @@ async function sendToAI(userInput, currentMermaidCode) {
         if (systemMessage) {
             messages.push(systemMessage);
             
-            // 添加系统消息之后的所有历史消息（除了系统消息）
+            // 添加系统消息之后的所有历史消息（除了系统消息和最后一个AI响应）
             // 使用新数组避免直接修改原始消息
             const nonSystemMessages = conversation.messages
                 .filter(msg => msg.role !== 'system')
                 .slice(-20); // 保留最近20条非系统消息
-                
+            
             // 检查最后一条消息是否是当前要发送的用户消息
             let hasCurrentUserMessage = false;
             if (nonSystemMessages.length > 0) {
@@ -575,8 +611,23 @@ async function sendToAI(userInput, currentMermaidCode) {
                 }
             }
             
-            // 添加所有历史消息
+            // 移除最后一条AI消息，因为我们将使用当前编辑器中的代码
+            const lastAIMessageIndex = findLastIndexOfRole(nonSystemMessages, 'assistant');
+            if (lastAIMessageIndex !== -1) {
+                nonSystemMessages.splice(lastAIMessageIndex, 1);
+            }
+            
+            // 添加历史消息
             messages = messages.concat(nonSystemMessages);
+            
+            // 添加当前编辑器中的Mermaid代码作为最后一条AI消息
+            if (currentMermaidCode) {
+                messages.push({
+                    role: 'assistant',
+                    content: '```mermaid\n' + currentMermaidCode + '\n```',
+                    timestamp: currentTime
+                });
+            }
             
             // 只有在历史消息中没有当前用户消息时才添加
             if (!hasCurrentUserMessage) {
@@ -595,8 +646,14 @@ async function sendToAI(userInput, currentMermaidCode) {
                 timestamp: currentTime
             });
             
-            // 添加所有历史消息
-            const historicalMessages = conversation.messages.slice(-20);
+            // 添加历史消息，但不包括最后一个AI响应
+            let historicalMessages = conversation.messages.slice(-20);
+            
+            // 移除最后一条AI消息，因为我们将使用当前编辑器中的代码
+            const lastAIMessageIndex = findLastIndexOfRole(historicalMessages, 'assistant');
+            if (lastAIMessageIndex !== -1) {
+                historicalMessages.splice(lastAIMessageIndex, 1);
+            }
             
             // 检查最后一条消息是否是当前要发送的用户消息
             let hasCurrentUserMessage = false;
@@ -608,6 +665,15 @@ async function sendToAI(userInput, currentMermaidCode) {
             }
             
             messages = messages.concat(historicalMessages);
+            
+            // 添加当前编辑器中的Mermaid代码作为最后一条AI消息
+            if (currentMermaidCode) {
+                messages.push({
+                    role: 'assistant',
+                    content: '```mermaid\n' + currentMermaidCode + '\n```',
+                    timestamp: currentTime
+                });
+            }
             
             // 只有在历史消息中没有当前用户消息时才添加
             if (!hasCurrentUserMessage) {
@@ -656,7 +722,7 @@ async function sendToAI(userInput, currentMermaidCode) {
         },
         body: JSON.stringify({
             api_key: apiKey,
-            model: 'qwen-plus',
+            model: 'qwen-plus-latest',
             messages: messages
         })
     });
@@ -774,35 +840,8 @@ function updateMermaidPreview(code, retryCount = 0) {
             const errorMsg = err.message || '未知错误';
             showToast(`Mermaid解析错误: ${errorMsg} ${locationInfo ? `(${locationInfo})` : ''}`, 5000);
             
-            // 检查是否已经有修复请求在进行中
-            if (window.isFixingMermaid) {
-                console.log('已有修复请求在进行中，跳过重复请求');
-                return;
-            }
-            
-            // 如果未达到最大重试次数，且没有修复请求在进行中，则启动修复流程
-            if (retryCount < 3) {
-                console.log(`尝试自动修复Mermaid错误，第${retryCount+1}次尝试`);
-                const activeConversationId = localStorage.getItem('activeConversationId');
-                
-                // 设置修复状态为进行中
-                window.isFixingMermaid = true;
-                
-                // 显示正在修复的提示
-                previewDiv.innerHTML = `<div class="text-blue-500 p-4">正在请求AI修复Mermaid语法错误，请稍候...</div>`;
-                
-                // 适当延迟确保UI更新
-                setTimeout(() => {
-                    requestMermaidFix(code, {err, hash}, activeConversationId, retryCount)
-                        .catch(fixError => {
-                            console.error('请求AI修复图表失败：', fixError);
-                        })
-                        .finally(() => {
-                            // 无论成功失败，完成后重置修复状态
-                            window.isFixingMermaid = false;
-                        });
-                }, 100);
-            }
+            // 显示错误信息和询问用户是否重新生成
+            showMermaidErrorDialog(code, { err, hash });
         };
         
         // 确保使用与mermaid.js版本兼容的方法进行渲染
@@ -828,80 +867,133 @@ function updateMermaidPreview(code, retryCount = 0) {
         // 显示Toast通知，加入位置信息
         showToast(`Mermaid渲染错误: ${error.message || '未知错误'} ${locationInfo ? `(${locationInfo})` : ''}`, 5000);
         
-        // 检查是否已经重试次数过多
-        if (retryCount >= 3) {
-            // 已达到最大重试次数，显示错误给用户
-            previewDiv.innerHTML = `<div class="text-red-500 p-4">
-                <p class="font-bold">Mermaid图表渲染错误（已尝试3次修复）：</p>
-                <p>${error.message || '未知错误'}</p>
-                ${mermaidError.hash ? `<p>位置: 第${mermaidError.hash.loc?.first_line || '?'}行</p>` : ''}
-            </div>`;
-            // 最终失败的更明显的Toast
-            showToast(`多次修复失败，请手动修改图表代码`, 4000);
-            return;
-        }
-        
-        // 检查是否已有修复请求在进行
-        if (window.isFixingMermaid) {
-            console.log('已有修复请求在进行中，跳过重复请求');
-            return;
-        }
-        
-        // 标记开始修复
-        window.isFixingMermaid = true;
-        
-        // 尝试请求AI修复语法错误
-        const activeConversationId = localStorage.getItem('activeConversationId');
-        if (activeConversationId) {
-            // 获取当前对话以添加错误信息
-            const conversation = getConversation(activeConversationId);
-            if (conversation && conversation.messages.length > 0) {
-                // 显示正在修复的提示
-                previewDiv.innerHTML = `<div class="text-blue-500 p-4">正在请求AI修复Mermaid语法错误，请稍候...</div>`;
-                
-                // 调用修复函数，传递更详细的错误信息
-                requestMermaidFix(code, mermaidError, activeConversationId, retryCount)
-                    .catch(fixError => {
-                        console.error('请求AI修复图表失败：', fixError);
-                        previewDiv.innerHTML = `<div class="text-red-500 p-4">修复请求失败：${fixError.message}</div>`;
-                        // 显示修复失败的Toast
-                        showToast(`AI修复失败: ${fixError.message}`, 4000);
-                    })
-                    .finally(() => {
-                        // 重置修复状态
-                        window.isFixingMermaid = false;
-                    });
-            } else {
-                window.isFixingMermaid = false; // 重置状态
-            }
-        } else {
-            // 没有活跃对话，直接显示错误
-            previewDiv.innerHTML = `<div class="text-red-500 p-4">
-                <p>Mermaid图表渲染错误：</p>
-                <p>${error.message || '未知错误'}</p>
-                ${mermaidError.hash ? `<p>位置: 第${mermaidError.hash.loc?.first_line || '?'}行</p>` : ''}
-            </div>`;
-            window.isFixingMermaid = false; // 重置状态
-        }
+        // 显示错误信息和询问用户是否重新生成
+        showMermaidErrorDialog(code, mermaidError);
     }
 }
 
-// 请求AI修复Mermaid语法错误
-async function requestMermaidFix(code, error, conversationId, retryCount) {
+// 显示Mermaid错误对话框，询问用户是否重新生成
+function showMermaidErrorDialog(code, error) {
     // 获取详细的错误信息
     let errorDetails;
     try {
-        // 尝试提取更详细的错误信息
         if (error instanceof Error) {
             errorDetails = {
                 message: error.message,
                 name: error.name,
                 stack: error.stack,
-                // 检查是否有额外的Mermaid特定错误属性
                 details: error.str || error.hash || error.details || ''
             };
         } else {
-            // 如果不是Error实例，直接使用
+            errorDetails = error;
+        }
+    } catch (e) {
+        console.warn('提取错误详情失败:', e);
+        errorDetails = { message: '未知Mermaid错误' };
+    }
+
+    // 显示错误信息在预览区域
+    const previewDiv = document.getElementById('preview');
+    const locationInfo = errorDetails.hash && errorDetails.hash.loc ? 
+        `第${errorDetails.hash.loc.first_line || '?'}行` : '';
+    
+    previewDiv.innerHTML = `
+        <div class="text-red-500 p-4 border border-red-200 rounded-lg bg-red-50">
+            <div class="flex items-center mb-3">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <h3 class="font-bold text-lg">Mermaid图表渲染错误</h3>
+            </div>
+            <div class="mb-4">
+                <p class="font-medium">错误信息：${errorDetails.message || '未知错误'}</p>
+                ${locationInfo ? `<p class="text-sm mt-1">错误位置：${locationInfo}</p>` : ''}
+                ${errorDetails.details ? `<p class="text-sm mt-1 text-gray-600">详细信息：${errorDetails.details}</p>` : ''}
+            </div>
+            <div class="flex space-x-3">
+                <button id="regenerate-mermaid" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                    请AI重新生成
+                </button>
+                <button id="ignore-error" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+                    忽略错误
+                </button>
+                <button id="edit-manually" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
+                    手动修改
+                </button>
+            </div>
+        </div>
+    `;
+
+    // 添加按钮事件监听器
+    const regenerateBtn = document.getElementById('regenerate-mermaid');
+    const ignoreBtn = document.getElementById('ignore-error');
+    const editBtn = document.getElementById('edit-manually');
+
+    if (regenerateBtn) {
+        regenerateBtn.addEventListener('click', () => {
+            requestMermaidFix(code, errorDetails);
+        });
+    }
+
+    if (ignoreBtn) {
+        ignoreBtn.addEventListener('click', () => {
+            // 显示原始错误的代码，但不再尝试渲染
+            previewDiv.innerHTML = `
+                <div class="text-gray-500 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <p class="mb-2">已忽略Mermaid渲染错误</p>
+                    <p class="text-sm">您可以在编辑器中手动修改代码，或点击"请AI重新生成"按钮</p>
+                </div>
+            `;
+        });
+    }
+
+    if (editBtn) {
+        editBtn.addEventListener('click', () => {
+            // 聚焦到编辑器
+            const quill = Quill.find(document.getElementById('editor-container'));
+            if (quill) {
+                quill.focus();
+            }
+            
+            // 显示提示信息
+            previewDiv.innerHTML = `
+                <div class="text-blue-500 p-4 border border-blue-200 rounded-lg bg-blue-50">
+                    <p class="mb-2">请在左侧编辑器中修改Mermaid代码</p>
+                    <p class="text-sm">修改后预览将自动更新</p>
+                </div>
+            `;
+            
+            showToast('请在编辑器中手动修改代码', 3000);
+        });
+    }
+}
+
+// 请求AI修复Mermaid语法错误（修改为用户主动触发）
+async function requestMermaidFix(code, error) {
+    // 检查是否已经有修复请求在进行中
+    if (window.isFixingMermaid) {
+        console.log('已有修复请求在进行中，跳过重复请求');
+        showToast('正在修复中，请稍候...', 2000);
+        return;
+    }
+
+    const activeConversationId = localStorage.getItem('activeConversationId');
+    if (!activeConversationId) {
+        showToast('没有活跃的对话，无法请求修复', 3000);
+        return;
+    }
+
+    // 获取详细的错误信息
+    let errorDetails;
+    try {
+        if (error instanceof Error) {
+            errorDetails = {
+                message: error.message,
+                name: error.name,
+                stack: error.stack,
+                details: error.str || error.hash || error.details || ''
+            };
+        } else {
             errorDetails = error;
         }
     } catch (e) {
@@ -910,7 +1002,7 @@ async function requestMermaidFix(code, error, conversationId, retryCount) {
     }
 
     // 显示开始修复的Toast通知
-    showToast(`正在尝试自动修复Mermaid图表...`, 3000);
+    showToast(`正在请求AI修复Mermaid图表...`, 3000);
 
     // 创建修复请求消息，包含更详细的错误信息
     const fixRequest = `我的Mermaid图表代码有语法错误，请修复：
@@ -927,11 +1019,18 @@ ${code}
 请分析错误原因并修复代码。你的回复必须只包含修复后的完整Mermaid代码，不要包含任何解释或其他内容。`;
 
     // 获取当前对话
-    const conversation = getConversation(conversationId);
+    const conversation = getConversation(activeConversationId);
     if (!conversation) {
-        window.isFixingMermaid = false; // 确保重置状态
-        throw new Error('找不到当前对话');
+        showToast('找不到当前对话', 3000);
+        return;
     }
+
+    // 设置修复状态为进行中
+    window.isFixingMermaid = true;
+
+    // 显示正在修复的提示
+    const previewDiv = document.getElementById('preview');
+    previewDiv.innerHTML = `<div class="text-blue-500 p-4">正在请求AI修复Mermaid语法错误，请稍候...</div>`;
 
     // 禁用输入和按钮
     const quill = Quill.find(document.getElementById('editor-container'));
@@ -1035,16 +1134,16 @@ ${code}
                 }
             }
             
-            updateConversation(conversationId, conversation);
+            updateConversation(activeConversationId, conversation, false);
             
             // 刷新版本列表UI
             loadVersions();
             
             // 显示修复成功的Toast
-            showToast(`Mermaid图表已自动修复并更新到版本历史`, 3000);
+            showToast(`Mermaid图表已修复并更新到版本历史`, 3000);
             
-            // 尝试使用修复后的代码更新预览（增加重试计数）
-            updateMermaidPreview(fixedCode, retryCount + 1);
+            // 尝试使用修复后的代码更新预览
+            updateMermaidPreview(fixedCode);
             
             // 延迟添加事件监听器
             if (quill) {
@@ -1057,13 +1156,18 @@ ${code}
         }
     } catch (error) {
         // 显示修复失败的Toast
-        showToast(`自动修复失败: ${error.message}`, 4000);
-        throw error;
+        showToast(`修复失败: ${error.message}`, 4000);
+        
+        // 重新显示错误对话框
+        showMermaidErrorDialog(code, error);
     } finally {
         // 恢复输入和按钮状态
         if (quill) {
             toggleInputState(true, quill);
         }
+        
+        // 重置修复状态
+        window.isFixingMermaid = false;
     }
 }
 
@@ -1180,8 +1284,10 @@ function updateConversation(id, updatedConversation, trimHistory = true) {
                     }
                 }
                 
-                // 在添加了新消息后，清除currentVersionId标记
-                delete updatedConversation.currentVersionId;
+                // 只有在trimHistory为true时才清除currentVersionId标记
+                if (trimHistory) {
+                    delete updatedConversation.currentVersionId;
+                }
             }
             
             // 限制消息历史长度，确保不超过80k
@@ -1419,37 +1525,52 @@ function loadConversation(id) {
         }
     }
     
-    // 获取最后一条助手消息中的Mermaid代码
-    const assistantMessages = conversation.messages.filter(msg => msg.role === 'assistant');
-    if (assistantMessages.length > 0) {
-        const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-        const mermaidCode = extractMermaidCode(lastAssistantMessage.content);
-        
-        if (mermaidCode) {
-            // 更新编辑器
-            const quill = Quill.find(document.getElementById('editor-container'));
-            if (quill) {
-                // 临时移除事件监听器
-                quill.off('text-change');
-                
-                quill.setText(mermaidCode);
-                
-                // 延迟更新预览，确保Mermaid库已初始化完成
-                const previewDiv = document.getElementById('preview');
-                // 先清空预览区域，避免在Mermaid初始化前显示错误代码
-                previewDiv.innerHTML = '<div class="p-4 text-gray-500">正在准备预览...</div>';
-                
-                // 延迟渲染，确保Mermaid库有足够时间初始化
-                setTimeout(() => {
-                    // 更新预览
-                    updateMermaidPreview(mermaidCode);
-                }, 300);
-                
-                // 重新添加事件监听器
-                setTimeout(() => {
-                    addEditorEventListener(quill);
-                }, 500);
-            }
+    let mermaidCode = '';
+    let shouldLoadCurrentVersion = false;
+    
+    // 优先检查是否有当前版本
+    if (conversation.currentVersionId && conversation.versions) {
+        const currentVersion = conversation.versions.find(v => v.id === conversation.currentVersionId);
+        if (currentVersion) {
+            mermaidCode = currentVersion.code;
+            shouldLoadCurrentVersion = true;
+            console.log('加载当前版本:', currentVersion.name);
+        }
+    }
+    
+    // 如果没有当前版本，则获取最后一条助手消息中的Mermaid代码
+    if (!mermaidCode) {
+        const assistantMessages = conversation.messages.filter(msg => msg.role === 'assistant');
+        if (assistantMessages.length > 0) {
+            const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+            mermaidCode = extractMermaidCode(lastAssistantMessage.content);
+        }
+    }
+    
+    if (mermaidCode) {
+        // 更新编辑器
+        const quill = Quill.find(document.getElementById('editor-container'));
+        if (quill) {
+            // 临时移除事件监听器
+            quill.off('text-change');
+            
+            quill.setText(mermaidCode);
+            
+            // 延迟更新预览，确保Mermaid库已初始化完成
+            const previewDiv = document.getElementById('preview');
+            // 先清空预览区域，避免在Mermaid初始化前显示错误代码
+            previewDiv.innerHTML = '<div class="p-4 text-gray-500">正在准备预览...</div>';
+            
+            // 延迟渲染，确保Mermaid库有足够时间初始化
+            setTimeout(() => {
+                // 更新预览
+                updateMermaidPreview(mermaidCode);
+            }, 300);
+            
+            // 重新添加事件监听器
+            setTimeout(() => {
+                addEditorEventListener(quill);
+            }, 500);
         }
     }
     
@@ -1491,30 +1612,50 @@ function addVersion(conversation, name, prompt, code) {
         conversation.versions = [];
     }
     
-    // 确保不保存重复的版本
-    const hasExistingVersion = conversation.versions.some(
-        v => v.code === code && v.prompt === prompt
-    );
-    
-    if (!hasExistingVersion) {
-        const now = new Date().toISOString();
+    // 对于手动编辑，查找并覆盖之前的手动编辑版本
+    if (prompt === '手动编辑') {
+        const existingManualEditIndex = conversation.versions.findIndex(v => v.prompt === '手动编辑');
         
-        // 创建新版本
-        const newVersion = {
-            id: Date.now().toString(),
-            name: name,
-            prompt: prompt,
-            code: code,
-            createdAt: now,
-            // 保存相关消息引用
-            relatedMessages: findRelatedMessages(conversation.messages, prompt)
-        };
-        
-        conversation.versions.push(newVersion);
-        
-        // 确保相关的用户消息都有时间戳
-        ensureMessagesHaveTimestamp(conversation.messages, prompt, now);
+        if (existingManualEditIndex !== -1) {
+            // 覆盖现有的手动编辑版本
+            conversation.versions[existingManualEditIndex] = {
+                ...conversation.versions[existingManualEditIndex],
+                name: name,
+                code: code,
+                updatedAt: new Date().toISOString()
+            };
+            console.log('覆盖手动编辑版本');
+            return conversation.versions[existingManualEditIndex];
+        }
     }
+    
+    // 对于AI生成的版本，保持原有的重复检查
+    if (prompt !== '手动编辑') {
+        const hasExistingVersion = conversation.versions.some(
+            v => v.code === code && v.prompt === prompt
+        );
+        
+        if (hasExistingVersion) {
+            console.log('版本已存在，跳过添加');
+            return null;
+        }
+    }
+    
+    const now = new Date().toISOString();
+    
+    // 创建新版本
+    const newVersion = {
+        id: Date.now().toString(),
+        name: name,
+        prompt: prompt,
+        code: code,
+        createdAt: now,
+        updatedAt: now
+    };
+    
+    conversation.versions.push(newVersion);
+    console.log('添加新版本:', name);
+    return newVersion;
 }
 
 // 查找与提示词相关的消息索引
@@ -1576,18 +1717,30 @@ function loadVersions() {
     // 按创建时间逆序排序
     const versions = [...conversation.versions].reverse();
     
+    // 查找手动编辑版本
+    const manualEditVersion = versions.find(v => v.prompt === '手动编辑');
+    const currentVersionId = conversation.currentVersionId;
+    
     versions.forEach(version => {
         const versionItem = document.createElement('div');
-        versionItem.className = 'version-item border-b border-gray-200 p-3 hover:bg-gray-50 transition-colors cursor-pointer';
+        
+        // 判断是否为当前活动版本
+        const isActive = version.id === currentVersionId || 
+                        (manualEditVersion && version.id === manualEditVersion.id && !currentVersionId);
+        
+        versionItem.className = `version-item border-b border-gray-200 p-3 hover:bg-gray-50 transition-colors cursor-pointer ${
+            isActive ? 'bg-blue-50 border-blue-200' : ''
+        }`;
         
         const formattedDate = new Date(version.createdAt).toLocaleString();
         
         versionItem.innerHTML = `
             <div class="flex justify-between items-center">
-                <span class="font-medium">${version.name}</span>
+                <span class="font-medium ${isActive ? 'text-blue-600' : ''}">${version.name}</span>
                 <span class="text-xs text-gray-500">${formattedDate}</span>
             </div>
             <div class="text-sm text-gray-600 truncate mt-1">${version.prompt}</div>
+            ${isActive ? '<div class="text-xs text-blue-500 mt-1">● 当前版本</div>' : ''}
         `;
         
         // 点击加载该版本
@@ -1597,6 +1750,13 @@ function loadVersions() {
         
         versionsList.appendChild(versionItem);
     });
+    
+    // 如果有手动编辑版本且没有设置当前版本，自动加载手动编辑版本
+    if (manualEditVersion && !currentVersionId) {
+        setTimeout(() => {
+            loadVersion(manualEditVersion);
+        }, 100);
+    }
 }
 
 // 加载特定版本
@@ -2358,4 +2518,687 @@ function downloadSvgAsPng(svgElement, width, height) {
         console.error('下载PNG失败：', err);
         showToast('下载PNG失败：' + err.message, 3000);
     }
+}
+
+// 添加元素高亮功能
+function setupElementHighlight(quill) {
+    const preview = document.getElementById('preview');
+    let highlightedElement = null;
+    let highlightedLines = [];
+    let currentHoveredElement = null;
+    
+    // 将内部函数暴露到全局作用域
+    window._highlightState = {
+        highlightedElement,
+        highlightedLines,
+        preview
+    };
+    
+    // 监听预览区鼠标移动事件，实现hover显示AI编辑按钮
+    preview.addEventListener('mouseover', (e) => {
+        const hoveredNode = findMermaidNode(e.target);
+        
+        if (hoveredNode && hoveredNode !== currentHoveredElement) {
+            currentHoveredElement = hoveredNode;
+            // 显示AI编辑按钮
+            showAIEditButton(hoveredNode);
+        }
+    });
+    
+    // 监听鼠标离开预览区事件
+    preview.addEventListener('mouseleave', () => {
+        currentHoveredElement = null;
+        // 只移除按钮，不移除输入框
+        const editInput = document.getElementById('ai-edit-input');
+        if (!editInput) {
+            removeAIEditButton();
+        }
+    });
+    
+    // 监听预览区点击事件
+    preview.addEventListener('click', (e) => {
+        // 查找被点击的Mermaid元素
+        const clickedNode = findMermaidNode(e.target);
+        
+        if (clickedNode) {
+            // 清除之前的高亮
+            clearHighlights();
+            
+            // 高亮点击的元素
+            highlightElement(clickedNode);
+            
+            // 在编辑器中高亮对应的代码
+            highlightCodeInEditor(clickedNode, quill);
+        } else {
+            // 点击空白处，清除所有高亮（但不关闭AI编辑输入框）
+            const editInput = document.getElementById('ai-edit-input');
+            if (!editInput) {
+                clearHighlights();
+            }
+        }
+    });
+    
+    // 查找Mermaid节点
+    function findMermaidNode(target) {
+        let element = target;
+        
+        // 向上查找直到找到节点元素或到达预览区
+        while (element && element !== preview) {
+            // 检查是否是节点元素
+            if (element.classList.contains('node') || 
+                element.classList.contains('edgePath') ||
+                element.classList.contains('cluster') ||
+                element.parentElement?.classList.contains('node')) {
+                return element.classList.contains('node') ? element : element.parentElement;
+            }
+            element = element.parentElement;
+        }
+        
+        return null;
+    }
+    
+    // 高亮元素
+    function highlightElement(element) {
+        window._highlightState.highlightedElement = element;
+        element.classList.add('highlighted');
+        
+        // 向SVG注入渐变定义
+        injectGradientDefinition();
+        
+        // 如果是节点，也高亮相关的连接线
+        const nodeId = getNodeId(element);
+        if (nodeId) {
+            highlightRelatedEdges(nodeId);
+        }
+        
+        // 移除这里的显示AI编辑按钮调用，因为现在改为hover显示
+        // showAIEditButton(element);
+    }
+    
+    // 高亮相关的连接线
+    function highlightRelatedEdges(nodeId) {
+        const edges = preview.querySelectorAll('.edgePath');
+        edges.forEach(edge => {
+            const edgeLabel = edge.querySelector('.edgeLabel');
+            if (edgeLabel && edgeLabel.textContent.includes(nodeId)) {
+                edge.classList.add('highlighted');
+            }
+        });
+    }
+    
+    // 在编辑器中高亮对应代码
+    function highlightCodeInEditor(element, quill) {
+        const nodeId = getNodeId(element);
+        const nodeText = element.querySelector('.nodeLabel, .label, foreignObject > div')?.textContent?.trim();
+        
+        if (!nodeId && !nodeText) return;
+        
+        const text = quill.getText();
+        const lines = text.split('\n');
+        
+        // 查找包含节点的行
+        const matchingLines = [];
+        lines.forEach((line, index) => {
+            // 跳过空行和纯注释行
+            if (!line.trim() || line.trim().startsWith('%%')) return;
+            
+            // 1. 精确匹配节点ID
+            if (nodeId) {
+                // 节点定义模式
+                const nodeDefPatterns = [
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\[`),  // A[文本]
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\(`),  // A(文本)
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\{`),  // A{文本}
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\|`),  // A|文本|
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\>`),  // A>文本]
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\[\\[`), // A[[文本]]
+                ];
+                
+                // 节点引用模式（在箭头连接中）
+                const nodeRefPatterns = [
+                    new RegExp(`\\s+${escapeRegExp(nodeId)}\\s*--`),    // A --> B
+                    new RegExp(`-->\\s*${escapeRegExp(nodeId)}\\s*`),   // A --> B
+                    new RegExp(`\\s+${escapeRegExp(nodeId)}\\s*\\.`),   // A.->B
+                    new RegExp(`\\.->\\s*${escapeRegExp(nodeId)}\\s*`), // A.->B
+                    new RegExp(`\\s+${escapeRegExp(nodeId)}\\s*==`),    // A ==> B
+                    new RegExp(`==>\\s*${escapeRegExp(nodeId)}\\s*`),   // A ==> B
+                ];
+                
+                // 检查是否匹配任何模式
+                const isMatch = [...nodeDefPatterns, ...nodeRefPatterns].some(pattern => pattern.test(line));
+                if (isMatch) {
+                    matchingLines.push(index);
+                }
+            }
+            
+            // 2. 如果有节点文本，也尝试匹配
+            if (nodeText && !matchingLines.includes(index)) {
+                // 转义特殊字符
+                const escapedText = escapeRegExp(nodeText);
+                
+                // 检查是否包含节点文本（在方括号、圆括号等内）
+                const textPatterns = [
+                    new RegExp(`\\[${escapedText}\\]`),
+                    new RegExp(`\\(${escapedText}\\)`),
+                    new RegExp(`\\{${escapedText}\\}`),
+                    new RegExp(`\\|${escapedText}\\|`),
+                    new RegExp(`\\>${escapedText}\\]`),
+                    new RegExp(`\\[\\[${escapedText}\\]\\]`),
+                ];
+                
+                const hasText = textPatterns.some(pattern => pattern.test(line));
+                if (hasText) {
+                    matchingLines.push(index);
+                }
+            }
+        });
+        
+        // 高亮找到的行
+        if (matchingLines.length > 0) {
+            highlightLines(quill, matchingLines);
+        }
+    }
+    
+    // 高亮指定的行
+    function highlightLines(quill, lineNumbers) {
+        window._highlightState.highlightedLines = lineNumbers;
+        
+        // 获取编辑器DOM元素
+        const editor = quill.root;
+        const lines = editor.querySelectorAll('.ql-editor > *');
+        
+        lineNumbers.forEach(lineNum => {
+            if (lines[lineNum]) {
+                lines[lineNum].classList.add('line-highlight');
+                
+                // 滚动到第一个高亮行
+                if (lineNum === lineNumbers[0]) {
+                    lines[lineNum].scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                    });
+                }
+            }
+        });
+    }
+    
+    // 监听编辑器变化，清除高亮
+    quill.on('text-change', () => {
+        clearHighlights();
+    });
+    
+    return { clearHighlights };
+}
+
+// 显示AI编辑按钮
+function showAIEditButton(element) {
+    // 移除之前的编辑按钮（如果有）
+    removeAIEditButton();
+    
+    // 获取预览区元素
+    const preview = document.getElementById('preview');
+    if (!preview) return;
+    
+    // 获取元素的位置
+    const rect = element.getBoundingClientRect();
+    const previewRect = preview.getBoundingClientRect();
+    
+    // 创建编辑按钮容器
+    const editButton = document.createElement('div');
+    editButton.id = 'ai-edit-button';
+    editButton.className = 'ai-edit-button';
+    editButton.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <title>AI编辑</title>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            <circle cx="9" cy="10" r="1" fill="currentColor"></circle>
+            <circle cx="12" cy="10" r="1" fill="currentColor"></circle>
+            <circle cx="15" cy="10" r="1" fill="currentColor"></circle>
+        </svg>
+    `;
+    
+    // 计算位置时考虑预览区的滚动偏移
+    const scrollLeft = preview.scrollLeft;
+    const scrollTop = preview.scrollTop;
+    
+    // 设置按钮位置（在元素右上角）
+    editButton.style.position = 'absolute';
+    editButton.style.left = `${rect.right - previewRect.left - 12 + scrollLeft}px`;
+    editButton.style.top = `${rect.top - previewRect.top - 12 + scrollTop}px`;
+    
+    // 添加到预览区
+    preview.style.position = 'relative';
+    preview.appendChild(editButton);
+    
+    // 添加点击事件
+    editButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showAIEditInput(element, editButton);
+    });
+}
+
+// 显示AI编辑输入框
+function showAIEditInput(element, editButton) {
+    // 移除之前的输入框（如果有）
+    removeAIEditInput();
+    
+    // 获取预览区元素
+    const preview = document.getElementById('preview');
+    if (!preview) return;
+    
+    // 获取Quill编辑器实例
+    const quill = Quill.find(document.getElementById('editor-container'));
+    if (!quill) return;
+    
+    // 获取节点信息
+    const nodeId = getNodeId(element);
+    const nodeText = element.querySelector('.nodeLabel, .label, foreignObject > div')?.textContent?.trim();
+    
+    // 创建输入框容器
+    const inputContainer = document.createElement('div');
+    inputContainer.id = 'ai-edit-input';
+    inputContainer.className = 'ai-edit-input';
+    inputContainer.innerHTML = `
+        <div class="ai-edit-header">
+            <span>编辑节点: ${nodeId || nodeText || '未知节点'}</span>
+            <button class="ai-edit-close">×</button>
+        </div>
+        <textarea class="ai-edit-textarea" placeholder="描述你想要的修改，例如：\n- 修改节点文本为...\n- 添加一个子节点...\n- 改变节点类型为..."></textarea>
+        <div class="ai-edit-actions">
+            <button class="ai-edit-cancel">取消</button>
+            <button class="ai-edit-submit">修改</button>
+        </div>
+    `;
+    
+    // 设置输入框位置（在按钮下方）
+    const buttonRect = editButton.getBoundingClientRect();
+    const previewRect = preview.getBoundingClientRect();
+    
+    // 计算位置时考虑预览区的滚动偏移
+    const scrollLeft = preview.scrollLeft;
+    const scrollTop = preview.scrollTop;
+    
+    inputContainer.style.position = 'absolute';
+    inputContainer.style.left = `${Math.min(buttonRect.left - previewRect.left + scrollLeft, previewRect.width - 300)}px`;
+    inputContainer.style.top = `${buttonRect.bottom - previewRect.top + 10 + scrollTop}px`;
+    
+    // 添加到预览区
+    preview.appendChild(inputContainer);
+    
+    // 获取元素引用
+    const textarea = inputContainer.querySelector('.ai-edit-textarea');
+    const closeBtn = inputContainer.querySelector('.ai-edit-close');
+    const cancelBtn = inputContainer.querySelector('.ai-edit-cancel');
+    const submitBtn = inputContainer.querySelector('.ai-edit-submit');
+    
+    // 自动聚焦
+    setTimeout(() => textarea.focus(), 50);
+    
+    // 添加快捷键支持
+    textarea.addEventListener('keydown', (e) => {
+        // 只有按下Ctrl+Enter或Command+Enter才发送消息
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault(); // 阻止默认行为
+            if (!submitBtn.disabled) {
+                submitBtn.click(); // 触发发送按钮点击
+            }
+        }
+        // 按ESC键关闭
+        else if (e.key === 'Escape') {
+            closeInput();
+        }
+        // 所有其他情况的Enter键都正常处理（包括普通Enter和Shift+Enter）
+    });
+    
+    // 事件处理
+    const closeInput = () => {
+        removeAIEditInput();
+    };
+    
+    closeBtn.addEventListener('click', closeInput);
+    cancelBtn.addEventListener('click', closeInput);
+    
+    submitBtn.addEventListener('click', async () => {
+        const userRequest = textarea.value.trim();
+        if (!userRequest) {
+            showToast('请输入修改要求', 2000);
+            return;
+        }
+        
+        // 禁用发送按钮并显示加载状态
+        submitBtn.disabled = true;
+        const originalText = submitBtn.textContent;
+        submitBtn.innerHTML = '<span class="loading"></span> 发送中...';
+        
+        // 获取当前代码
+        const currentCode = quill.getText().trim();
+        
+        // 构建针对特定节点的修改请求
+        const nodeInfo = {
+            id: nodeId,
+            text: nodeText,
+            type: detectNodeType(element)
+        };
+        
+        const aiRequest = `请修改Mermaid图表中的特定节点。
+
+节点信息：
+- 节点ID: ${nodeInfo.id || '未知'}
+- 节点文本: ${nodeInfo.text || '未知'}
+- 节点类型: ${nodeInfo.type || '未知'}
+
+用户要求：${userRequest}
+
+当前完整代码：
+\`\`\`mermaid
+${currentCode}
+\`\`\`
+
+请只修改指定的节点，保持其他部分不变。返回修改后的完整Mermaid代码。`;
+        
+        try {
+            // 关闭输入框
+            closeInput();
+            
+            // 清除高亮
+            clearHighlights();
+            
+            // 发送到AI
+            await sendNodeEditToAI(aiRequest, userRequest);
+        } catch (error) {
+            console.error('发送AI编辑请求失败:', error);
+            showToast('发送失败：' + error.message, 3000);
+        } finally {
+            // 恢复按钮状态（如果输入框还存在的话）
+            if (document.getElementById('ai-edit-input')) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        }
+    });
+    
+    // 按ESC键关闭
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeInput();
+        }
+    });
+    
+    // 防止点击输入框时触发预览区的点击事件
+    inputContainer.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
+
+// 检测节点类型
+function detectNodeType(element) {
+    const shape = element.querySelector('rect, circle, polygon, path');
+    if (!shape) return '未知';
+    
+    if (shape.tagName === 'rect') return '矩形';
+    if (shape.tagName === 'circle') return '圆形';
+    if (shape.tagName === 'polygon') return '菱形';
+    if (shape.classList.contains('er')) return '圆角矩形';
+    
+    return '默认';
+}
+
+// 发送节点编辑请求到AI
+async function sendNodeEditToAI(aiRequest, userRequest) {
+    // 获取Quill编辑器实例
+    const quill = Quill.find(document.getElementById('editor-container'));
+    if (!quill) {
+        showToast('编辑器未初始化', 2000);
+        return;
+    }
+    
+    // 更新用户输入显示
+    updateLastUserInput(`编辑节点: ${userRequest}`);
+    
+    // 禁用输入
+    toggleInputState(false, quill);
+    
+    try {
+        // 获取当前对话
+        const activeConversationId = localStorage.getItem('activeConversationId') || createNewConversation();
+        const conversation = getConversation(activeConversationId);
+        
+        if (conversation) {
+            const currentTime = new Date().toISOString();
+            
+            // 添加用户消息
+            conversation.messages.push({
+                role: 'user',
+                content: aiRequest,
+                timestamp: currentTime
+            });
+            
+            // 保存用户消息
+            updateConversation(activeConversationId, conversation, false);
+            
+            // 发送到AI
+            const result = await sendToAI(aiRequest, quill.getText().trim());
+            
+            // 提取Mermaid代码
+            const mermaidCode = extractMermaidCode(result);
+            
+            if (mermaidCode) {
+                // 更新编辑器
+                quill.off('text-change');
+                quill.setText(mermaidCode);
+                
+                // 更新预览
+                updateMermaidPreview(mermaidCode);
+                
+                // 添加AI响应
+                conversation.messages.push({
+                    role: 'assistant',
+                    content: result,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // 添加版本
+                const versionName = `编辑节点: ${userRequest.substring(0, 20)}${userRequest.length > 20 ? '...' : ''}`;
+                const newVersion = addVersion(conversation, versionName, aiRequest, mermaidCode);
+                
+                // 将新版本设置为当前版本
+                if (newVersion) {
+                    conversation.currentVersionId = newVersion.id;
+                }
+                
+                // 保存对话
+                updateConversation(activeConversationId, conversation, false);
+                
+                // 更新版本列表
+                loadVersions();
+                
+                // 重新添加事件监听器
+                setTimeout(() => {
+                    addEditorEventListener(quill);
+                }, 100);
+                
+                showToast('节点修改成功', 2000);
+            } else {
+                throw new Error('未能从AI响应中提取有效的Mermaid代码');
+            }
+        }
+    } catch (error) {
+        console.error('发送节点编辑请求时出错：', error);
+        showToast('修改失败：' + error.message, 3000);
+    } finally {
+        // 恢复输入状态
+        toggleInputState(true, quill);
+    }
+}
+
+// 移除AI编辑按钮
+function removeAIEditButton() {
+    const existingButton = document.getElementById('ai-edit-button');
+    if (existingButton) {
+        existingButton.remove();
+    }
+}
+
+// 移除AI编辑输入框
+function removeAIEditInput() {
+    const existingInput = document.getElementById('ai-edit-input');
+    if (existingInput) {
+        existingInput.remove();
+    }
+}
+
+// 获取节点ID - 完整实现
+function getNodeId(element) {
+    // 尝试从不同的属性中获取节点ID
+    
+    // 1. 首先尝试从data-id属性获取（某些版本的Mermaid会设置这个）
+    const dataId = element.getAttribute('data-id');
+    if (dataId) return dataId;
+    
+    // 2. 从id属性中提取（格式通常是 flowchart-nodeId-xxx）
+    const elementId = element.id;
+    if (elementId && elementId.includes('flowchart-')) {
+        const match = elementId.match(/flowchart-([^-]+)-/);
+        if (match && match[1]) return match[1];
+    }
+    
+    // 3. 从类名中提取ID
+    const classMatch = Array.from(element.classList).find(cls => cls.includes('flowchart-'));
+    if (classMatch) {
+        const match = classMatch.match(/flowchart-([^-]+)-/);
+        if (match && match[1]) return match[1];
+    }
+    
+    // 4. 查找节点内的文本标签
+    const labelElement = element.querySelector('.nodeLabel, .label, foreignObject > div');
+    if (labelElement) {
+        // 获取文本内容，但需要处理可能包含的HTML
+        const textContent = labelElement.textContent?.trim();
+        
+        // 尝试从父元素的属性中找到对应的节点ID
+        // Mermaid通常会在某处保存原始的节点ID
+        const parentG = element.closest('g[id]');
+        if (parentG && parentG.id.includes('-')) {
+            const match = parentG.id.match(/([^-]+)$/);
+            if (match && match[1] !== 'output') {
+                // 提取ID部分，通常是数字
+                const idMatch = parentG.id.match(/(\w+)-\d+$/);
+                if (idMatch) return idMatch[1];
+            }
+        }
+    }
+    
+    // 5. 最后的尝试：查找包含节点定义的文本
+    const allText = element.textContent?.trim();
+    if (allText) {
+        // 如果文本很短（可能是节点ID），直接返回
+        if (allText.length <= 10 && /^[A-Za-z0-9_]+$/.test(allText)) {
+            return allText;
+        }
+    }
+    
+    return null;
+}
+
+// 清除所有高亮 - 全局函数
+function clearHighlights() {
+    const state = window._highlightState;
+    if (!state) return;
+    
+    // 清除预览区高亮
+    if (state.highlightedElement) {
+        state.highlightedElement.classList.remove('highlighted');
+        state.highlightedElement = null;
+    }
+    
+    // 清除所有高亮的边
+    const preview = document.getElementById('preview');
+    if (preview) {
+        preview.querySelectorAll('.highlighted').forEach(el => {
+            el.classList.remove('highlighted');
+        });
+    }
+    
+    // 清除编辑器高亮
+    const editor = document.querySelector('.ql-editor');
+    if (editor) {
+        editor.querySelectorAll('.line-highlight').forEach(el => {
+            el.classList.remove('line-highlight');
+        });
+    }
+    
+    if (state.highlightedLines) {
+        state.highlightedLines = [];
+    }
+    
+    // 移除AI编辑按钮和输入框
+    removeAIEditButton();
+    removeAIEditInput();
+}
+
+// 辅助函数：转义正则表达式特殊字符
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 注入SVG渐变定义
+function injectGradientDefinition() {
+    const preview = document.getElementById('preview');
+    if (!preview) return;
+    
+    const svg = preview.querySelector('svg');
+    if (!svg) return;
+    
+    // 检查是否已经有渐变定义
+    if (svg.querySelector('#highlight-gradient')) return;
+    
+    // 创建defs元素
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+    }
+    
+    // 创建渐变定义
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    gradient.setAttribute('id', 'highlight-gradient');
+    gradient.setAttribute('x1', '0%');
+    gradient.setAttribute('y1', '0%');
+    gradient.setAttribute('x2', '100%');
+    gradient.setAttribute('y2', '100%');
+    
+    // 添加渐变色停
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('stop-color', '#8b5cf6');
+    stop1.setAttribute('stop-opacity', '0.8');
+    
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', '100%');
+    stop2.setAttribute('stop-color', '#3b82f6');
+    stop2.setAttribute('stop-opacity', '0.8');
+    
+    gradient.appendChild(stop1);
+    gradient.appendChild(stop2);
+    defs.appendChild(gradient);
+    
+    // 创建一个更柔和的发光滤镜
+    const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+    filter.setAttribute('id', 'highlight-glow');
+    
+    const feGaussianBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+    feGaussianBlur.setAttribute('stdDeviation', '2');
+    feGaussianBlur.setAttribute('result', 'coloredBlur');
+    
+    const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+    const feMergeNode1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMergeNode1.setAttribute('in', 'coloredBlur');
+    const feMergeNode2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMergeNode2.setAttribute('in', 'SourceGraphic');
+    
+    feMerge.appendChild(feMergeNode1);
+    feMerge.appendChild(feMergeNode2);
+    filter.appendChild(feGaussianBlur);
+    filter.appendChild(feMerge);
+    defs.appendChild(filter);
 }

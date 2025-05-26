@@ -10,7 +10,7 @@ def proxy_to_qwen(request_body):
         # 解析请求数据
         data = json.loads(request_body)
         api_key = data.get('api_key', '')
-        model = data.get('model', 'qwen-plus')
+        model = data.get('model', 'qwen-plus-latest')
         messages = data.get('messages', [])
         
         # 准备发送到阿里云的请求
