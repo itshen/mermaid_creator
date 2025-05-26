@@ -468,6 +468,43 @@ function setupEventListeners(quill) {
     // 初始添加编辑器事件监听器
     addEditorEventListener(quill);
     
+    // 添加全局键盘快捷键处理
+    document.addEventListener('keydown', (e) => {
+        // 处理 Ctrl+S 或 Cmd+S 快捷键
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault(); // 阻止默认的保存页面行为
+            
+            // 显示保存动画
+            showSaveAnimation();
+            
+            // 触发手动保存逻辑
+            const currentCode = quill.getText().trim();
+            if (currentCode) {
+                // 手动触发保存
+                const activeConversationId = localStorage.getItem('activeConversationId');
+                if (activeConversationId) {
+                    const conversation = getConversation(activeConversationId);
+                    if (conversation) {
+                        // 创建或更新手动编辑版本
+                        const versionName = `手动编辑`;
+                        const savedVersion = addVersion(conversation, versionName, '手动编辑', currentCode);
+                        
+                        if (savedVersion) {
+                            // 设置为当前版本
+                            conversation.currentVersionId = savedVersion.id;
+                            
+                            // 保存对话
+                            updateConversation(activeConversationId, conversation, false);
+                            
+                            // 更新版本列表
+                            loadVersions();
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
     // 点击抽屉背景关闭
     settingsDrawer.addEventListener('click', (e) => {
         if (e.target === settingsDrawer) {
@@ -1614,33 +1651,42 @@ function addVersion(conversation, name, prompt, code) {
     
     // 对于手动编辑，需要判断是否应该创建新版本还是覆盖现有版本
     if (prompt === '手动编辑') {
-        const existingManualEditIndex = conversation.versions.findIndex(v => v.prompt === '手动编辑');
+        const existingManualEditIndex = conversation.versions.findIndex(v => v.prompt.startsWith('手动编辑'));
         
-        // 检查是否有AI编辑版本（非手动编辑的版本）
-        const hasAIVersions = conversation.versions.some(v => v.prompt !== '手动编辑');
+        // 检查最后一个版本是否是手动编辑版本
+        const lastVersion = conversation.versions.length > 0 ? conversation.versions[conversation.versions.length - 1] : null;
+        const isLastVersionManualEdit = lastVersion && lastVersion.prompt.startsWith('手动编辑');
         
-        // 如果存在手动编辑版本且没有AI版本，则覆盖现有的手动编辑版本
-        // 如果存在AI版本，则创建新的手动编辑版本
-        if (existingManualEditIndex !== -1 && !hasAIVersions) {
-            // 覆盖现有的手动编辑版本（只有在没有AI版本的情况下）
-            conversation.versions[existingManualEditIndex] = {
-                ...conversation.versions[existingManualEditIndex],
-                name: name,
+        // 如果最后一个版本是手动编辑，则覆盖它（连续手动编辑合并）
+        if (isLastVersionManualEdit && existingManualEditIndex !== -1) {
+            // 找到最后一个手动编辑版本的索引
+            const lastManualEditIndex = conversation.versions.length - 1;
+            
+            // 覆盖最后一个手动编辑版本
+            conversation.versions[lastManualEditIndex] = {
+                ...conversation.versions[lastManualEditIndex],
+                name: conversation.versions[lastManualEditIndex].name, // 保持原名称
                 code: code,
                 updatedAt: new Date().toISOString()
             };
-            console.log('覆盖手动编辑版本（无AI版本）');
-            return conversation.versions[existingManualEditIndex];
+            console.log('合并连续手动编辑到现有版本');
+            return conversation.versions[lastManualEditIndex];
         }
         
-        // 如果有AI版本，则为手动编辑创建新版本，添加时间戳以区分
-        if (hasAIVersions) {
+        // 如果最后一个版本不是手动编辑（即有AI版本），则创建新的手动编辑版本
+        if (!isLastVersionManualEdit) {
             const timestamp = new Date().toLocaleTimeString('zh-CN', { 
                 hour: '2-digit', 
                 minute: '2-digit' 
             });
             name = `手动编辑 ${timestamp}`;
-            console.log('创建新的手动编辑版本（存在AI版本）');
+            console.log('创建新的手动编辑版本（上一个版本是AI生成）');
+        }
+        
+        // 如果没有任何版本，创建第一个手动编辑版本
+        if (conversation.versions.length === 0) {
+            name = `手动编辑`;
+            console.log('创建第一个手动编辑版本');
         }
     }
     
@@ -1899,6 +1945,58 @@ function showToast(message = '已复制到剪贴板', duration = 2000) {
             toast.style.maxWidth = '';
         }, 300);
     }, duration);
+}
+
+// 显示保存动画
+function showSaveAnimation() {
+    // 创建保存动画元素
+    let saveIndicator = document.getElementById('save-indicator');
+    
+    // 如果不存在，创建保存指示器
+    if (!saveIndicator) {
+        saveIndicator = document.createElement('div');
+        saveIndicator.id = 'save-indicator';
+        saveIndicator.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 transform translate-y-full opacity-0 transition-all duration-300 z-50';
+        saveIndicator.innerHTML = `
+            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>保存中...</span>
+        `;
+        document.body.appendChild(saveIndicator);
+    }
+    
+    // 显示保存指示器
+    saveIndicator.classList.remove('translate-y-full', 'opacity-0');
+    saveIndicator.classList.add('translate-y-0', 'opacity-100');
+    
+    // 更新为保存中状态
+    saveIndicator.innerHTML = `
+        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>保存中...</span>
+    `;
+    saveIndicator.className = 'fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 transform translate-y-0 opacity-100 transition-all duration-300 z-50';
+    
+    // 500ms后显示保存成功
+    setTimeout(() => {
+        saveIndicator.innerHTML = `
+            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>已保存</span>
+        `;
+        saveIndicator.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 transform translate-y-0 opacity-100 transition-all duration-300 z-50';
+        
+        // 1.5秒后隐藏
+        setTimeout(() => {
+            saveIndicator.classList.remove('translate-y-0', 'opacity-100');
+            saveIndicator.classList.add('translate-y-full', 'opacity-0');
+        }, 1500);
+    }, 500);
 }
 
 // 打开设置抽屉函数
