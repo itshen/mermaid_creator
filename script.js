@@ -1612,20 +1612,35 @@ function addVersion(conversation, name, prompt, code) {
         conversation.versions = [];
     }
     
-    // 对于手动编辑，查找并覆盖之前的手动编辑版本
+    // 对于手动编辑，需要判断是否应该创建新版本还是覆盖现有版本
     if (prompt === '手动编辑') {
         const existingManualEditIndex = conversation.versions.findIndex(v => v.prompt === '手动编辑');
         
-        if (existingManualEditIndex !== -1) {
-            // 覆盖现有的手动编辑版本
+        // 检查是否有AI编辑版本（非手动编辑的版本）
+        const hasAIVersions = conversation.versions.some(v => v.prompt !== '手动编辑');
+        
+        // 如果存在手动编辑版本且没有AI版本，则覆盖现有的手动编辑版本
+        // 如果存在AI版本，则创建新的手动编辑版本
+        if (existingManualEditIndex !== -1 && !hasAIVersions) {
+            // 覆盖现有的手动编辑版本（只有在没有AI版本的情况下）
             conversation.versions[existingManualEditIndex] = {
                 ...conversation.versions[existingManualEditIndex],
                 name: name,
                 code: code,
                 updatedAt: new Date().toISOString()
             };
-            console.log('覆盖手动编辑版本');
+            console.log('覆盖手动编辑版本（无AI版本）');
             return conversation.versions[existingManualEditIndex];
+        }
+        
+        // 如果有AI版本，则为手动编辑创建新版本，添加时间戳以区分
+        if (hasAIVersions) {
+            const timestamp = new Date().toLocaleTimeString('zh-CN', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            name = `手动编辑 ${timestamp}`;
+            console.log('创建新的手动编辑版本（存在AI版本）');
         }
     }
     
@@ -1717,8 +1732,9 @@ function loadVersions() {
     // 按创建时间逆序排序
     const versions = [...conversation.versions].reverse();
     
-    // 查找手动编辑版本
-    const manualEditVersion = versions.find(v => v.prompt === '手动编辑');
+    // 查找最新的手动编辑版本（可能有多个，取最新的）
+    const manualEditVersions = versions.filter(v => v.prompt.startsWith('手动编辑'));
+    const latestManualEditVersion = manualEditVersions.length > 0 ? manualEditVersions[0] : null;
     const currentVersionId = conversation.currentVersionId;
     
     versions.forEach(version => {
@@ -1726,7 +1742,7 @@ function loadVersions() {
         
         // 判断是否为当前活动版本
         const isActive = version.id === currentVersionId || 
-                        (manualEditVersion && version.id === manualEditVersion.id && !currentVersionId);
+                        (latestManualEditVersion && version.id === latestManualEditVersion.id && !currentVersionId);
         
         versionItem.className = `version-item border-b border-gray-200 p-3 hover:bg-gray-50 transition-colors cursor-pointer ${
             isActive ? 'bg-blue-50 border-blue-200' : ''
@@ -1752,9 +1768,9 @@ function loadVersions() {
     });
     
     // 如果有手动编辑版本且没有设置当前版本，自动加载手动编辑版本
-    if (manualEditVersion && !currentVersionId) {
+    if (latestManualEditVersion && !currentVersionId) {
         setTimeout(() => {
-            loadVersion(manualEditVersion);
+            loadVersion(latestManualEditVersion);
         }, 100);
     }
 }
