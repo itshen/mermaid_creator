@@ -2281,15 +2281,36 @@ function createExampleConversations() {
     
     // 简化的流程图示例，减少出错可能性
     const tutorialCode = `graph TD
-    A[开始] --> B{是否有API Key?}
-    B -->|是| C[发送请求到AI]
-    B -->|否| D[显示设置页面]
-    C --> E[更新预览]
-    D --> F[保存API Key]
-    F --> C
-    E --> G[下载图表]
-    G --> H[结束]`;
+    A[用户访问应用] --> B{是否首次使用？}
+    B -->|是| C[点击系统设置]
+    B -->|否| D[直接使用]
     
+    C --> E[输入API Key]
+    E --> F[保存设置]
+    F --> G[设置完成]
+    
+    G --> H[在下方输入框输入需求]
+    D --> H
+    
+    H --> I[AI生成Mermaid图表]
+    I --> J[预览图表效果]
+    
+    J --> K{选择操作}
+    K -->|下载SVG| L[下载SVG格式]
+    K -->|下载PNG| M[下载PNG格式]
+    K -->|复制代码| N[复制Mermaid代码]
+    K -->|继续修改| H
+    
+    L --> O[完成]
+    M --> O
+    N --> O
+    
+    style A fill:#e1f5fe
+    style G fill:#c8e6c9
+    style I fill:#fff3e0
+    style J fill:#f3e5f5
+    style O fill:#e8f5e8`;
+   
     const tutorialConversation = {
         id: tutorialId,
         title: '系统使用说明',
