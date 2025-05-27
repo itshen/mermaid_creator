@@ -46,9 +46,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 加载保存的API KEY
-    const savedApiKey = localStorage.getItem('qwenApiKey') || '';
+    // 加载保存的设置
+    const savedEngine = localStorage.getItem('aiEngine') || 'qwen';
+    
+    // 根据引擎类型加载对应的API Key和模型名称
+    const getApiKeyForEngine = (engine) => {
+        if (engine === 'openrouter') {
+            return localStorage.getItem('openrouterApiKey') || '';
+        } else {
+            return localStorage.getItem('qwenApiKey') || '';
+        }
+    };
+    
+    const getModelNameForEngine = (engine) => {
+        if (engine === 'openrouter') {
+            return localStorage.getItem('openrouterModelName') || 'anthropic/claude-sonnet-4';
+        } else {
+            return localStorage.getItem('qwenModelName') || 'qwen-plus-latest';
+        }
+    };
+    
+    const savedApiKey = getApiKeyForEngine(savedEngine);
+    const savedModelName = getModelNameForEngine(savedEngine);
+    
     document.getElementById('apiKey').value = savedApiKey;
+    document.getElementById('aiEngine').value = savedEngine;
+    document.getElementById('modelName').value = savedModelName;
 
     // 延迟初始化，确保Mermaid库已加载
     setTimeout(() => {
@@ -121,7 +144,20 @@ function setupEventListeners(quill) {
 
     saveSettings.addEventListener('click', () => {
         const apiKey = document.getElementById('apiKey').value.trim();
-        localStorage.setItem('qwenApiKey', apiKey);
+        const aiEngine = document.getElementById('aiEngine').value;
+        const modelName = document.getElementById('modelName').value.trim();
+        
+        // 根据引擎类型保存到不同的键名
+        if (aiEngine === 'openrouter') {
+            localStorage.setItem('openrouterApiKey', apiKey);
+            localStorage.setItem('openrouterModelName', modelName);
+        } else {
+            localStorage.setItem('qwenApiKey', apiKey);
+            localStorage.setItem('qwenModelName', modelName);
+        }
+        
+        localStorage.setItem('aiEngine', aiEngine);
+        
         closeSettingsDrawer();
         showToast('设置已保存');
     });
@@ -130,15 +166,27 @@ function setupEventListeners(quill) {
     if (resetAppBtn) {
         resetAppBtn.addEventListener('click', () => {
             if (confirm('确定要重置应用吗？这将清除所有对话和设置，恢复到初始状态。')) {
-                // 保存API Key
-                const apiKey = localStorage.getItem('qwenApiKey');
+                // 保存两种引擎的API Key和模型名称
+                const qwenApiKey = localStorage.getItem('qwenApiKey');
+                const openrouterApiKey = localStorage.getItem('openrouterApiKey');
+                const qwenModelName = localStorage.getItem('qwenModelName');
+                const openrouterModelName = localStorage.getItem('openrouterModelName');
                 
                 // 清除所有localStorage
                 localStorage.clear();
                 
-                // 恢复API Key
-                if (apiKey) {
-                    localStorage.setItem('qwenApiKey', apiKey);
+                // 恢复API Key和模型名称
+                if (qwenApiKey) {
+                    localStorage.setItem('qwenApiKey', qwenApiKey);
+                }
+                if (openrouterApiKey) {
+                    localStorage.setItem('openrouterApiKey', openrouterApiKey);
+                }
+                if (qwenModelName) {
+                    localStorage.setItem('qwenModelName', qwenModelName);
+                }
+                if (openrouterModelName) {
+                    localStorage.setItem('openrouterModelName', openrouterModelName);
                 }
                 
                 // 重置已查看示例标记
@@ -614,9 +662,20 @@ function toggleInputState(enabled, quill) {
 
 // 发送请求到AI
 async function sendToAI(userInput, currentMermaidCode) {
-    const apiKey = localStorage.getItem('qwenApiKey');
+    const aiEngine = localStorage.getItem('aiEngine') || 'qwen';
+    
+    // 根据引擎类型获取对应的API Key和模型名称
+    let apiKey, modelName;
+    if (aiEngine === 'openrouter') {
+        apiKey = localStorage.getItem('openrouterApiKey');
+        modelName = localStorage.getItem('openrouterModelName') || 'anthropic/claude-sonnet-4';
+    } else {
+        apiKey = localStorage.getItem('qwenApiKey');
+        modelName = localStorage.getItem('qwenModelName') || 'qwen-plus-latest';
+    }
+    
     if (!apiKey) {
-        throw new Error('请先在设置中配置API Key');
+        throw new Error(`请先在设置中配置${aiEngine === 'openrouter' ? 'OpenRouter' : '通义千问'} API Key`);
     }
 
     const currentTime = new Date().toISOString();
@@ -751,18 +810,35 @@ async function sendToAI(userInput, currentMermaidCode) {
     // 确保发送前检查并去除重复的消息
     messages = deduplicateMessages(messages);
 
-    // 使用代理服务器发送请求
-    const response = await fetch('/proxy/qwen', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            api_key: apiKey,
-            model: 'qwen-plus-latest',
-            messages: messages
-        })
-    });
+    // 根据引擎类型发送请求
+    let response;
+    if (aiEngine === 'openrouter') {
+        // 使用OpenRouter API
+        response = await fetch('/proxy/openrouter', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                api_key: apiKey,
+                model: modelName,
+                messages: messages
+            })
+        });
+    } else {
+        // 使用Qwen API
+        response = await fetch('/proxy/qwen', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                api_key: apiKey,
+                model: modelName,
+                messages: messages
+            })
+        });
+    }
 
     // 检查响应
     if (!response.ok) {
@@ -771,12 +847,22 @@ async function sendToAI(userInput, currentMermaidCode) {
     }
 
     const data = await response.json();
-    // 适配通义千问 API 响应格式
-    const content = data.output && data.output.choices && data.output.choices[0] && 
-                    data.output.choices[0].message && data.output.choices[0].message.content || '';
+    
+    // 根据引擎类型解析响应
+    let content;
+    if (aiEngine === 'openrouter') {
+        // OpenRouter API 响应格式
+        content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '';
+    } else {
+        // 通义千问 API 响应格式
+        content = data.output && data.output.choices && data.output.choices[0] && 
+                  data.output.choices[0].message && data.output.choices[0].message.content || '';
+    }
     
     // 输出调试信息
     console.log('发送到API的消息历史:', JSON.stringify(messages));
+    console.log('使用的AI引擎:', aiEngine);
+    console.log('使用的模型:', modelName);
     
     return content;
 }
@@ -814,23 +900,36 @@ function deduplicateMessages(messages) {
 // 从AI响应中提取Mermaid代码
 function extractMermaidCode(response) {
     try {
+        console.log('开始提取Mermaid代码，响应内容:', response);
+        console.log('响应类型:', typeof response);
+        console.log('响应长度:', response.length);
+        
         // 首先尝试使用正则表达式匹配mermaid代码块
         const mermaidRegex = /```mermaid\s*([\s\S]*?)\s*```/;
         const match = response.match(mermaidRegex);
+        console.log('正则匹配结果:', match);
+        
         if (match) {
-            return match[1].trim();
+            const extractedCode = match[1].trim();
+            console.log('成功提取Mermaid代码:', extractedCode);
+            return extractedCode;
         }
         
         // 如果正则匹配失败，检查是否为JSON响应（字符串形式）
         if (response.includes('"content":')) {
+            console.log('检测到JSON格式响应，尝试解析');
             try {
                 // 尝试解析为JSON
                 const jsonObj = JSON.parse(response);
+                console.log('JSON解析成功:', jsonObj);
                 // 检查是否有content字段
                 if (jsonObj.content) {
                     const contentMatch = jsonObj.content.match(mermaidRegex);
+                    console.log('JSON content字段匹配结果:', contentMatch);
                     if (contentMatch) {
-                        return contentMatch[1].trim();
+                        const extractedCode = contentMatch[1].trim();
+                        console.log('从JSON content中成功提取Mermaid代码:', extractedCode);
+                        return extractedCode;
                     }
                 }
             } catch (e) {
@@ -838,8 +937,27 @@ function extractMermaidCode(response) {
             }
         }
         
+        // 尝试更宽松的匹配模式
+        console.log('尝试更宽松的匹配模式');
+        const looseRegex = /```(?:mermaid)?\s*([\s\S]*?)\s*```/;
+        const looseMatch = response.match(looseRegex);
+        console.log('宽松匹配结果:', looseMatch);
+        
+        if (looseMatch) {
+            const extractedCode = looseMatch[1].trim();
+            console.log('宽松模式成功提取代码:', extractedCode);
+            // 检查提取的代码是否看起来像Mermaid代码
+            if (extractedCode.includes('graph') || extractedCode.includes('flowchart') || 
+                extractedCode.includes('sequenceDiagram') || extractedCode.includes('classDiagram') ||
+                extractedCode.includes('stateDiagram') || extractedCode.includes('pie') ||
+                extractedCode.includes('gantt') || extractedCode.includes('timeline')) {
+                return extractedCode;
+            }
+        }
+        
         // 如果以上方法都失败，直接返回响应内容
         // 这是最后的后备措施，避免完全无法处理响应
+        console.log('所有匹配方法都失败，返回原始响应');
         return response.trim();
     } catch (error) {
         console.error('提取Mermaid代码时出错:', error);
