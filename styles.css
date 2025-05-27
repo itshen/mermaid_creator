@@ -269,6 +269,65 @@ button {
     margin-left: -2px;
     padding-left: 2px;
     transition: all 0.3s ease;
+    opacity: 1;
+}
+
+/* 高亮淡入动画 */
+.ql-editor .line-highlight.fade-in {
+    opacity: 0;
+    background: transparent;
+    border-left-color: transparent;
+}
+
+.ql-editor .line-highlight.fade-in.active {
+    opacity: 1;
+    background: linear-gradient(to right, 
+        rgba(139, 92, 246, 0.08), 
+        rgba(59, 130, 246, 0.08));
+    border-left: 2px solid;
+    border-image: linear-gradient(to bottom, #8b5cf6, #3b82f6) 1;
+    transition: all 0.3s ease;
+}
+
+/* 高亮淡出动画 - 修复版本，只改变透明度而不改变背景和边框样式 */
+.ql-editor .line-highlight.fade-out {
+    background: transparent !important;
+    border-left: none !important;
+    border-image: none !important;
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+/* 预览区高亮淡入动画 */
+.mermaid .highlighted.fade-in > rect,
+.mermaid .highlighted.fade-in > polygon,
+.mermaid .highlighted.fade-in > circle,
+.mermaid .highlighted.fade-in > ellipse {
+    stroke: transparent !important;
+    filter: none !important;
+    opacity: 0;
+}
+
+.mermaid .highlighted.fade-in.active > rect,
+.mermaid .highlighted.fade-in.active > polygon,
+.mermaid .highlighted.fade-in.active > circle,
+.mermaid .highlighted.fade-in.active > ellipse {
+    stroke: url(#highlight-gradient) !important;
+    stroke-width: 2px !important;
+    filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.3));
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+/* 预览区高亮淡出动画 - 修复版本 */
+.mermaid .highlighted.fade-out > rect,
+.mermaid .highlighted.fade-out > polygon,
+.mermaid .highlighted.fade-out > circle,
+.mermaid .highlighted.fade-out > ellipse {
+    stroke: inherit !important;
+    stroke-width: inherit !important;
+    opacity: 1;
+    transition: all 0.3s ease;
 }
 
 /* 连接线高亮 - 使用渐变效果 */
@@ -276,6 +335,28 @@ button {
     stroke: url(#highlight-gradient) !important;
     stroke-width: 1.5px !important;
     opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+/* 连接线淡入动画 */
+.mermaid .edgePath.highlighted.fade-in path {
+    stroke: transparent !important;
+    opacity: 0;
+}
+
+.mermaid .edgePath.highlighted.fade-in.active path {
+    stroke: url(#highlight-gradient) !important;
+    stroke-width: 1.5px !important;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+/* 连接线淡出动画 - 修复版本 */
+.mermaid .edgePath.highlighted.fade-out path {
+    stroke: inherit !important;
+    stroke-width: inherit !important;
+    opacity: 1;
+    transition: all 0.3s ease;
 }
 
 /* 悬停效果增强 */
@@ -322,6 +403,7 @@ button {
     transition: all 0.2s ease;
     z-index: 1000;
     color: #8b5cf6;
+    pointer-events: auto;
 }
 
 .ai-edit-button:hover {
@@ -333,6 +415,7 @@ button {
 .ai-edit-button svg {
     width: 20px;
     height: 20px;
+    pointer-events: none;
 }
 
 /* AI编辑输入框样式 */

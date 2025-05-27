@@ -2637,23 +2637,49 @@ function downloadSvgAsPng(svgElement, width, height) {
 // 添加元素高亮功能
 function setupElementHighlight(quill) {
     const preview = document.getElementById('preview');
-    let highlightedElement = null;
-    let highlightedLines = [];
     let currentHoveredElement = null;
+    let isClickHighlight = false; // 标记是否为点击产生的高亮
+    let hoverTimeout = null; // 防抖定时器
     
-    // 将内部函数暴露到全局作用域
+    // 将状态管理对象暴露到全局作用域，使用对象引用确保状态同步
     window._highlightState = {
-        highlightedElement,
-        highlightedLines,
-        preview
+        highlightedElement: null,
+        highlightedLines: [],
+        preview: preview,
+        isClickHighlight: false
     };
     
-    // 监听预览区鼠标移动事件，实现hover显示AI编辑按钮
+    // 防抖函数
+    function debounceHover(fn, delay = 100) {
+        return function(...args) {
+            if (hoverTimeout) {
+                clearTimeout(hoverTimeout);
+            }
+            hoverTimeout = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+    
+    // 监听预览区鼠标移动事件，实现hover显示AI编辑按钮和高亮对应行
     preview.addEventListener('mouseover', (e) => {
         const hoveredNode = findMermaidNode(e.target);
         
+        // 如果鼠标悬停在AI编辑按钮或输入框上，不处理
+        if (e.target.closest('#ai-edit-button') || e.target.closest('#ai-edit-input')) {
+            return;
+        }
+        
         if (hoveredNode && hoveredNode !== currentHoveredElement) {
             currentHoveredElement = hoveredNode;
+            
+            // 只有在非点击高亮状态下才响应hover
+            if (!window._highlightState.isClickHighlight) {
+                // 清除所有高亮
+                clearAllHighlights();
+                
+                // 高亮当前悬停的元素
+                setHighlight(hoveredNode);
+            }
+            
             // 显示AI编辑按钮
             showAIEditButton(hoveredNode);
         }
@@ -2662,9 +2688,12 @@ function setupElementHighlight(quill) {
     // 监听鼠标离开预览区事件
     preview.addEventListener('mouseleave', () => {
         currentHoveredElement = null;
-        // 只移除按钮，不移除输入框
-        const editInput = document.getElementById('ai-edit-input');
-        if (!editInput) {
+        
+        // 如果不是点击高亮，才清除高亮
+        if (!window._highlightState.isClickHighlight) {
+            clearAllHighlights();
+        } else {
+            // 点击高亮状态下，只移除AI编辑按钮
             removeAIEditButton();
         }
     });
@@ -2675,20 +2704,21 @@ function setupElementHighlight(quill) {
         const clickedNode = findMermaidNode(e.target);
         
         if (clickedNode) {
-            // 清除之前的高亮
-            clearHighlights();
+            // 清除所有高亮
+            clearAllHighlights();
             
             // 高亮点击的元素
-            highlightElement(clickedNode);
+            setHighlight(clickedNode);
             
-            // 在编辑器中高亮对应的代码
-            highlightCodeInEditor(clickedNode, quill);
+            // 设置为点击高亮状态
+            window._highlightState.isClickHighlight = true;
+            
+            // 显示AI编辑按钮
+            showAIEditButton(clickedNode);
         } else {
-            // 点击空白处，清除所有高亮（但不关闭AI编辑输入框）
-            const editInput = document.getElementById('ai-edit-input');
-            if (!editInput) {
-                clearHighlights();
-            }
+            // 点击空白处，清除所有高亮
+            window._highlightState.isClickHighlight = false;
+            clearAllHighlights();
         }
     });
     
@@ -2711,35 +2741,68 @@ function setupElementHighlight(quill) {
         return null;
     }
     
-    // 高亮元素
-    function highlightElement(element) {
+    // 设置高亮（统一的高亮函数）
+    function setHighlight(element) {
+        // 设置状态
         window._highlightState.highlightedElement = element;
-        element.classList.add('highlighted');
         
-        // 向SVG注入渐变定义
+        // 高亮预览区元素
+        element.classList.remove('fade-out', 'fade-in', 'active');
+        element.classList.add('highlighted', 'fade-in');
+        
+        // 注入渐变定义
         injectGradientDefinition();
         
-        // 如果是节点，也高亮相关的连接线
+        // 触发动画
+        requestAnimationFrame(() => {
+            element.classList.add('active');
+        });
+        
+        // 高亮相关连接线
         const nodeId = getNodeId(element);
         if (nodeId) {
-            highlightRelatedEdges(nodeId);
+            const edges = preview.querySelectorAll('.edgePath');
+            edges.forEach(edge => {
+                const edgeLabel = edge.querySelector('.edgeLabel');
+                if (edgeLabel && edgeLabel.textContent.includes(nodeId)) {
+                    edge.classList.remove('fade-out', 'fade-in', 'active');
+                    edge.classList.add('highlighted', 'fade-in');
+                    requestAnimationFrame(() => {
+                        edge.classList.add('active');
+                    });
+                }
+            });
         }
         
-        // 移除这里的显示AI编辑按钮调用，因为现在改为hover显示
-        // showAIEditButton(element);
+        // 高亮编辑器代码
+        highlightCodeInEditor(element, quill);
     }
     
-    // 高亮相关的连接线
-    function highlightRelatedEdges(nodeId) {
-        const edges = preview.querySelectorAll('.edgePath');
-        edges.forEach(edge => {
-            const edgeLabel = edge.querySelector('.edgeLabel');
-            if (edgeLabel && edgeLabel.textContent.includes(nodeId)) {
-                edge.classList.add('highlighted');
-            }
+    // 清除所有高亮（统一的清除函数）
+    function clearAllHighlights() {
+        // 清除预览区高亮
+        const highlightedElements = preview.querySelectorAll('.highlighted');
+        highlightedElements.forEach(el => {
+            el.classList.remove('highlighted', 'fade-in', 'active', 'fade-out');
         });
+        
+        // 清除编辑器高亮
+        const editor = document.querySelector('.ql-editor');
+        if (editor) {
+            const highlightedLines = editor.querySelectorAll('.line-highlight');
+            highlightedLines.forEach(line => {
+                line.classList.remove('line-highlight', 'fade-in', 'active', 'fade-out');
+            });
+        }
+        
+        // 重置状态
+        window._highlightState.highlightedElement = null;
+        window._highlightState.highlightedLines = [];
+        
+        // 移除按钮
+        removeAIEditButton();
     }
-    
+
     // 在编辑器中高亮对应代码
     function highlightCodeInEditor(element, quill) {
         const nodeId = getNodeId(element);
@@ -2812,7 +2875,7 @@ function setupElementHighlight(quill) {
             highlightLines(quill, matchingLines);
         }
     }
-    
+
     // 高亮指定的行
     function highlightLines(quill, lineNumbers) {
         window._highlightState.highlightedLines = lineNumbers;
@@ -2823,7 +2886,13 @@ function setupElementHighlight(quill) {
         
         lineNumbers.forEach(lineNum => {
             if (lines[lineNum]) {
-                lines[lineNum].classList.add('line-highlight');
+                // 添加高亮类
+                lines[lineNum].classList.add('line-highlight', 'fade-in');
+                
+                // 触发动画
+                requestAnimationFrame(() => {
+                    lines[lineNum].classList.add('active');
+                });
                 
                 // 滚动到第一个高亮行
                 if (lineNum === lineNumbers[0]) {
@@ -2835,19 +2904,28 @@ function setupElementHighlight(quill) {
             }
         });
     }
-    
+
     // 监听编辑器变化，清除高亮
     quill.on('text-change', () => {
-        clearHighlights();
+        clearAllHighlights();
     });
-    
-    return { clearHighlights };
+
+    return { clearHighlights: clearAllHighlights };
 }
 
 // 显示AI编辑按钮
 function showAIEditButton(element) {
-    // 移除之前的编辑按钮（如果有）
-    removeAIEditButton();
+    // 如果按钮已经存在且位置正确，不重复创建
+    const existingButton = document.getElementById('ai-edit-button');
+    if (existingButton) {
+        // 检查按钮是否对应当前元素
+        const currentElement = existingButton._targetElement;
+        if (currentElement === element) {
+            return; // 按钮已存在且正确，直接返回
+        }
+        // 移除旧按钮
+        removeAIEditButton();
+    }
     
     // 获取预览区元素
     const preview = document.getElementById('preview');
@@ -2861,6 +2939,7 @@ function showAIEditButton(element) {
     const editButton = document.createElement('div');
     editButton.id = 'ai-edit-button';
     editButton.className = 'ai-edit-button';
+    editButton._targetElement = element; // 保存目标元素引用
     editButton.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
             <title>AI编辑</title>
@@ -2888,6 +2967,85 @@ function showAIEditButton(element) {
         e.stopPropagation();
         showAIEditInput(element, editButton);
     });
+    
+    // 防止按钮上的鼠标事件影响父元素
+    editButton.addEventListener('mouseenter', (e) => {
+        e.stopPropagation();
+    });
+    
+    editButton.addEventListener('mouseleave', (e) => {
+        e.stopPropagation();
+    });
+}
+
+    
+    // 移除AI编辑按钮和输入框
+
+// 辅助函数：转义正则表达式特殊字符
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 注入SVG渐变定义
+function injectGradientDefinition() {
+    const preview = document.getElementById('preview');
+    if (!preview) return;
+    
+    const svg = preview.querySelector('svg');
+    if (!svg) return;
+    
+    // 检查是否已经有渐变定义
+    if (svg.querySelector('#highlight-gradient')) return;
+    
+    // 创建defs元素
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+    }
+    
+    // 创建渐变定义
+    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    gradient.setAttribute('id', 'highlight-gradient');
+    gradient.setAttribute('x1', '0%');
+    gradient.setAttribute('y1', '0%');
+    gradient.setAttribute('x2', '100%');
+    gradient.setAttribute('y2', '100%');
+    
+    // 添加渐变色停
+    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('stop-color', '#8b5cf6');
+    stop1.setAttribute('stop-opacity', '0.8');
+    
+    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stop2.setAttribute('offset', '100%');
+    stop2.setAttribute('stop-color', '#3b82f6');
+    stop2.setAttribute('stop-opacity', '0.8');
+    
+    gradient.appendChild(stop1);
+    gradient.appendChild(stop2);
+    defs.appendChild(gradient);
+    
+    // 创建一个更柔和的发光滤镜
+    const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+    filter.setAttribute('id', 'highlight-glow');
+    
+    const feGaussianBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+    feGaussianBlur.setAttribute('stdDeviation', '2');
+    feGaussianBlur.setAttribute('result', 'coloredBlur');
+    
+    const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+    const feMergeNode1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMergeNode1.setAttribute('in', 'coloredBlur');
+    const feMergeNode2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMergeNode2.setAttribute('in', 'SourceGraphic');
+    
+    feMerge.appendChild(feMergeNode1);
+    feMerge.appendChild(feMergeNode2);
+    filter.appendChild(feGaussianBlur);
+    filter.appendChild(feMerge);
+    defs.appendChild(filter);
 }
 
 // 显示AI编辑输入框
@@ -3216,102 +3374,36 @@ function getNodeId(element) {
 // 清除所有高亮 - 全局函数
 function clearHighlights() {
     const state = window._highlightState;
-    if (!state) return;
-    
-    // 清除预览区高亮
-    if (state.highlightedElement) {
-        state.highlightedElement.classList.remove('highlighted');
-        state.highlightedElement = null;
+    if (!state) {
+        return;
     }
     
-    // 清除所有高亮的边
+    // 重置点击高亮标志
+    state.isClickHighlight = false;
+    
+    // 清除预览区高亮
     const preview = document.getElementById('preview');
     if (preview) {
-        preview.querySelectorAll('.highlighted').forEach(el => {
-            el.classList.remove('highlighted');
+        const highlightedElements = preview.querySelectorAll('.highlighted');
+        highlightedElements.forEach(el => {
+            el.classList.remove('highlighted', 'fade-in', 'active', 'fade-out');
         });
     }
     
     // 清除编辑器高亮
     const editor = document.querySelector('.ql-editor');
     if (editor) {
-        editor.querySelectorAll('.line-highlight').forEach(el => {
-            el.classList.remove('line-highlight');
+        const highlightedLines = editor.querySelectorAll('.line-highlight');
+        highlightedLines.forEach(line => {
+            line.classList.remove('line-highlight', 'fade-in', 'active', 'fade-out');
         });
     }
     
-    if (state.highlightedLines) {
-        state.highlightedLines = [];
-    }
+    // 重置状态
+    state.highlightedElement = null;
+    state.highlightedLines = [];
     
-    // 移除AI编辑按钮和输入框
+    // 移除按钮
     removeAIEditButton();
     removeAIEditInput();
-}
-
-// 辅助函数：转义正则表达式特殊字符
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// 注入SVG渐变定义
-function injectGradientDefinition() {
-    const preview = document.getElementById('preview');
-    if (!preview) return;
-    
-    const svg = preview.querySelector('svg');
-    if (!svg) return;
-    
-    // 检查是否已经有渐变定义
-    if (svg.querySelector('#highlight-gradient')) return;
-    
-    // 创建defs元素
-    let defs = svg.querySelector('defs');
-    if (!defs) {
-        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        svg.insertBefore(defs, svg.firstChild);
-    }
-    
-    // 创建渐变定义
-    const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-    gradient.setAttribute('id', 'highlight-gradient');
-    gradient.setAttribute('x1', '0%');
-    gradient.setAttribute('y1', '0%');
-    gradient.setAttribute('x2', '100%');
-    gradient.setAttribute('y2', '100%');
-    
-    // 添加渐变色停
-    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop1.setAttribute('offset', '0%');
-    stop1.setAttribute('stop-color', '#8b5cf6');
-    stop1.setAttribute('stop-opacity', '0.8');
-    
-    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-    stop2.setAttribute('offset', '100%');
-    stop2.setAttribute('stop-color', '#3b82f6');
-    stop2.setAttribute('stop-opacity', '0.8');
-    
-    gradient.appendChild(stop1);
-    gradient.appendChild(stop2);
-    defs.appendChild(gradient);
-    
-    // 创建一个更柔和的发光滤镜
-    const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
-    filter.setAttribute('id', 'highlight-glow');
-    
-    const feGaussianBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
-    feGaussianBlur.setAttribute('stdDeviation', '2');
-    feGaussianBlur.setAttribute('result', 'coloredBlur');
-    
-    const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
-    const feMergeNode1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
-    feMergeNode1.setAttribute('in', 'coloredBlur');
-    const feMergeNode2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
-    feMergeNode2.setAttribute('in', 'SourceGraphic');
-    
-    feMerge.appendChild(feMergeNode1);
-    feMerge.appendChild(feMergeNode2);
-    filter.appendChild(feGaussianBlur);
-    filter.appendChild(feMerge);
-    defs.appendChild(filter);
 }
