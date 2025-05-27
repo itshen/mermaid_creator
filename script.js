@@ -2728,13 +2728,79 @@ function setupElementHighlight(quill) {
         
         // 向上查找直到找到节点元素或到达预览区
         while (element && element !== preview) {
-            // 检查是否是节点元素
+            // 检查是否是流程图节点元素
             if (element.classList.contains('node') || 
                 element.classList.contains('edgePath') ||
                 element.classList.contains('cluster') ||
                 element.parentElement?.classList.contains('node')) {
                 return element.classList.contains('node') ? element : element.parentElement;
             }
+            
+            // 检查是否是时序图元素
+            if (element.classList.contains('actor') ||
+                element.classList.contains('activation') ||
+                element.classList.contains('note') ||
+                element.classList.contains('loopText') ||
+                element.classList.contains('labelText') ||
+                element.classList.contains('messageText') ||
+                element.classList.contains('sequenceNumber') ||
+                element.parentElement?.classList.contains('actor') ||
+                element.parentElement?.classList.contains('activation') ||
+                element.parentElement?.classList.contains('note')) {
+                // 对于时序图，返回最合适的父元素
+                if (element.classList.contains('actor') || 
+                    element.classList.contains('activation') || 
+                    element.classList.contains('note')) {
+                    return element;
+                } else if (element.parentElement?.classList.contains('actor') ||
+                          element.parentElement?.classList.contains('activation') ||
+                          element.parentElement?.classList.contains('note')) {
+                    return element.parentElement;
+                } else {
+                    return element;
+                }
+            }
+            
+            // 检查是否是类图元素
+            if (element.classList.contains('classGroup') ||
+                element.classList.contains('class') ||
+                element.classList.contains('relation') ||
+                element.parentElement?.classList.contains('classGroup') ||
+                element.parentElement?.classList.contains('class')) {
+                return element.classList.contains('classGroup') || element.classList.contains('class') ? 
+                       element : element.parentElement;
+            }
+            
+            // 检查是否是状态图元素
+            if (element.classList.contains('state') ||
+                element.classList.contains('stateGroup') ||
+                element.classList.contains('transition') ||
+                element.parentElement?.classList.contains('state') ||
+                element.parentElement?.classList.contains('stateGroup')) {
+                return element.classList.contains('state') || element.classList.contains('stateGroup') ? 
+                       element : element.parentElement;
+            }
+            
+            // 检查是否是甘特图元素
+            if (element.classList.contains('task') ||
+                element.classList.contains('taskText') ||
+                element.classList.contains('section') ||
+                element.parentElement?.classList.contains('task') ||
+                element.parentElement?.classList.contains('section')) {
+                return element.classList.contains('task') || element.classList.contains('section') ? 
+                       element : element.parentElement;
+            }
+            
+            // 检查是否是饼图元素
+            if (element.classList.contains('pieSlice') ||
+                element.classList.contains('pieTitleText') ||
+                element.classList.contains('slice') ||
+                element.parentElement?.classList.contains('pieSlice') ||
+                element.parentElement?.classList.contains('slice')) {
+                return element.classList.contains('pieSlice') || element.classList.contains('slice') ? 
+                       element : element.parentElement;
+            }
+            
             element = element.parentElement;
         }
         
@@ -2806,7 +2872,7 @@ function setupElementHighlight(quill) {
     // 在编辑器中高亮对应代码
     function highlightCodeInEditor(element, quill) {
         const nodeId = getNodeId(element);
-        const nodeText = element.querySelector('.nodeLabel, .label, foreignObject > div')?.textContent?.trim();
+        const nodeText = element.querySelector('.nodeLabel, .label, foreignObject > div, .actor-text, .messageText, .labelText, .noteText, text')?.textContent?.trim();
         
         if (!nodeId && !nodeText) return;
         
@@ -2819,10 +2885,10 @@ function setupElementHighlight(quill) {
             // 跳过空行和纯注释行
             if (!line.trim() || line.trim().startsWith('%%')) return;
             
-            // 1. 精确匹配节点ID
+            // 1. 精确匹配节点ID（流程图模式）
             if (nodeId) {
-                // 节点定义模式
-                const nodeDefPatterns = [
+                // 流程图节点定义模式
+                const flowchartNodeDefPatterns = [
                     new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\[`),  // A[文本]
                     new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\(`),  // A(文本)
                     new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\{`),  // A{文本}
@@ -2831,8 +2897,8 @@ function setupElementHighlight(quill) {
                     new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\[\\[`), // A[[文本]]
                 ];
                 
-                // 节点引用模式（在箭头连接中）
-                const nodeRefPatterns = [
+                // 流程图节点引用模式（在箭头连接中）
+                const flowchartNodeRefPatterns = [
                     new RegExp(`\\s+${escapeRegExp(nodeId)}\\s*--`),    // A --> B
                     new RegExp(`-->\\s*${escapeRegExp(nodeId)}\\s*`),   // A --> B
                     new RegExp(`\\s+${escapeRegExp(nodeId)}\\s*\\.`),   // A.->B
@@ -2841,8 +2907,41 @@ function setupElementHighlight(quill) {
                     new RegExp(`==>\\s*${escapeRegExp(nodeId)}\\s*`),   // A ==> B
                 ];
                 
+                // 时序图participant模式
+                const sequenceParticipantPatterns = [
+                    new RegExp(`^\\s*participant\\s+${escapeRegExp(nodeId)}\\s*$`),  // participant A
+                    new RegExp(`^\\s*participant\\s+${escapeRegExp(nodeId)}\\s+as\\s+`), // participant A as 别名
+                ];
+                
+                // 时序图消息模式
+                const sequenceMessagePatterns = [
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*->>\\s*`),    // A->>B
+                    new RegExp(`\\s*->>\\s*${escapeRegExp(nodeId)}\\s*:`),    // A->>B:
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*-->>\\s*`),   // A-->>B
+                    new RegExp(`\\s*-->>\\s*${escapeRegExp(nodeId)}\\s*:`),   // A-->>B:
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*-\\)\\s*`),   // A-)B
+                    new RegExp(`\\s*-\\)\\s*${escapeRegExp(nodeId)}\\s*:`),   // A-)B:
+                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*--\\)\\s*`),  // A--)B
+                    new RegExp(`\\s*--\\)\\s*${escapeRegExp(nodeId)}\\s*:`),  // A--)B:
+                ];
+                
+                // 时序图注释模式
+                const sequenceNotePatterns = [
+                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+${escapeRegExp(nodeId)}\\s*:`), // Note over A:
+                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+${escapeRegExp(nodeId)}\\s*,`), // Note over A,B:
+                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+.*,\\s*${escapeRegExp(nodeId)}\\s*:`), // Note over B,A:
+                ];
+                
                 // 检查是否匹配任何模式
-                const isMatch = [...nodeDefPatterns, ...nodeRefPatterns].some(pattern => pattern.test(line));
+                const allPatterns = [
+                    ...flowchartNodeDefPatterns, 
+                    ...flowchartNodeRefPatterns,
+                    ...sequenceParticipantPatterns,
+                    ...sequenceMessagePatterns,
+                    ...sequenceNotePatterns
+                ];
+                
+                const isMatch = allPatterns.some(pattern => pattern.test(line));
                 if (isMatch) {
                     matchingLines.push(index);
                 }
@@ -2853,8 +2952,8 @@ function setupElementHighlight(quill) {
                 // 转义特殊字符
                 const escapedText = escapeRegExp(nodeText);
                 
-                // 检查是否包含节点文本（在方括号、圆括号等内）
-                const textPatterns = [
+                // 流程图文本模式
+                const flowchartTextPatterns = [
                     new RegExp(`\\[${escapedText}\\]`),
                     new RegExp(`\\(${escapedText}\\)`),
                     new RegExp(`\\{${escapedText}\\}`),
@@ -2863,7 +2962,15 @@ function setupElementHighlight(quill) {
                     new RegExp(`\\[\\[${escapedText}\\]\\]`),
                 ];
                 
-                const hasText = textPatterns.some(pattern => pattern.test(line));
+                // 时序图文本模式
+                const sequenceTextPatterns = [
+                    new RegExp(`participant\\s+\\w+\\s+as\\s+${escapedText}`), // participant A as 文本
+                    new RegExp(`:\\s*${escapedText}\\s*$`), // 消息文本
+                    new RegExp(`Note\\s+\\w+\\s+\\w+\\s*:\\s*${escapedText}`), // Note文本
+                ];
+                
+                const allTextPatterns = [...flowchartTextPatterns, ...sequenceTextPatterns];
+                const hasText = allTextPatterns.some(pattern => pattern.test(line));
                 if (hasText) {
                     matchingLines.push(index);
                 }
@@ -3203,13 +3310,66 @@ ${currentCode}
 
 // 检测节点类型
 function detectNodeType(element) {
+    // 检查元素的类名来确定图表类型和节点类型
+    if (element.classList.contains('actor')) {
+        return '时序图参与者';
+    }
+    
+    if (element.classList.contains('activation')) {
+        return '时序图激活框';
+    }
+    
+    if (element.classList.contains('note')) {
+        return '时序图注释';
+    }
+    
+    if (element.classList.contains('messageText') || 
+        element.classList.contains('labelText')) {
+        return '时序图消息';
+    }
+    
+    if (element.classList.contains('classGroup') || 
+        element.classList.contains('class')) {
+        return '类图类';
+    }
+    
+    if (element.classList.contains('relation')) {
+        return '类图关系';
+    }
+    
+    if (element.classList.contains('state')) {
+        return '状态图状态';
+    }
+    
+    if (element.classList.contains('stateGroup')) {
+        return '状态图组';
+    }
+    
+    if (element.classList.contains('transition')) {
+        return '状态图转换';
+    }
+    
+    if (element.classList.contains('task')) {
+        return '甘特图任务';
+    }
+    
+    if (element.classList.contains('section')) {
+        return '甘特图分组';
+    }
+    
+    if (element.classList.contains('pieSlice') || 
+        element.classList.contains('slice')) {
+        return '饼图扇形';
+    }
+    
+    // 流程图节点类型检测
     const shape = element.querySelector('rect, circle, polygon, path');
     if (!shape) return '未知';
     
-    if (shape.tagName === 'rect') return '矩形';
-    if (shape.tagName === 'circle') return '圆形';
-    if (shape.tagName === 'polygon') return '菱形';
-    if (shape.classList.contains('er')) return '圆角矩形';
+    if (shape.tagName === 'rect') return '流程图矩形';
+    if (shape.tagName === 'circle') return '流程图圆形';
+    if (shape.tagName === 'polygon') return '流程图菱形';
+    if (shape.classList.contains('er')) return '流程图圆角矩形';
     
     return '默认';
 }
@@ -3328,23 +3488,68 @@ function getNodeId(element) {
     
     // 2. 从id属性中提取（格式通常是 flowchart-nodeId-xxx）
     const elementId = element.id;
-    if (elementId && elementId.includes('flowchart-')) {
-        const match = elementId.match(/flowchart-([^-]+)-/);
-        if (match && match[1]) return match[1];
+    if (elementId) {
+        // 流程图ID模式
+        if (elementId.includes('flowchart-')) {
+            const match = elementId.match(/flowchart-([^-]+)-/);
+            if (match && match[1]) return match[1];
+        }
+        
+        // 时序图ID模式
+        if (elementId.includes('actor') || elementId.includes('sequence')) {
+            // 时序图的actor ID通常是 actor0, actor1 等
+            const actorMatch = elementId.match(/actor(\d+)/);
+            if (actorMatch) {
+                // 尝试从文本内容获取实际的participant名称
+                const textElement = element.querySelector('.actor-text, text');
+                if (textElement && textElement.textContent) {
+                    return textElement.textContent.trim();
+                }
+                return `actor${actorMatch[1]}`;
+            }
+        }
+        
+        // 类图ID模式
+        if (elementId.includes('classid-')) {
+            const match = elementId.match(/classid-([^-]+)/);
+            if (match && match[1]) return match[1];
+        }
+        
+        // 状态图ID模式
+        if (elementId.includes('state-')) {
+            const match = elementId.match(/state-([^-]+)/);
+            if (match && match[1]) return match[1];
+        }
     }
     
     // 3. 从类名中提取ID
-    const classMatch = Array.from(element.classList).find(cls => cls.includes('flowchart-'));
+    const classMatch = Array.from(element.classList).find(cls => 
+        cls.includes('flowchart-') || 
+        cls.includes('actor') || 
+        cls.includes('class-') ||
+        cls.includes('state-')
+    );
     if (classMatch) {
-        const match = classMatch.match(/flowchart-([^-]+)-/);
-        if (match && match[1]) return match[1];
+        if (classMatch.includes('flowchart-')) {
+            const match = classMatch.match(/flowchart-([^-]+)-/);
+            if (match && match[1]) return match[1];
+        }
+        if (classMatch.includes('actor')) {
+            const match = classMatch.match(/actor(\d+)/);
+            if (match) return `actor${match[1]}`;
+        }
     }
     
     // 4. 查找节点内的文本标签
-    const labelElement = element.querySelector('.nodeLabel, .label, foreignObject > div');
+    const labelElement = element.querySelector('.nodeLabel, .label, foreignObject > div, .actor-text, .messageText, .labelText, .noteText, text');
     if (labelElement) {
         // 获取文本内容，但需要处理可能包含的HTML
         const textContent = labelElement.textContent?.trim();
+        
+        // 对于时序图的actor，文本内容就是ID
+        if (element.classList.contains('actor') && textContent) {
+            return textContent;
+        }
         
         // 尝试从父元素的属性中找到对应的节点ID
         // Mermaid通常会在某处保存原始的节点ID
@@ -3359,12 +3564,44 @@ function getNodeId(element) {
         }
     }
     
-    // 5. 最后的尝试：查找包含节点定义的文本
+    // 5. 特殊处理时序图元素
+    if (element.classList.contains('actor')) {
+        // 对于actor元素，尝试从文本获取participant名称
+        const actorText = element.querySelector('.actor-text, text');
+        if (actorText && actorText.textContent) {
+            return actorText.textContent.trim();
+        }
+        
+        // 如果没有文本，尝试从ID中提取
+        const actorId = element.id;
+        if (actorId) {
+            const match = actorId.match(/actor(\d+)/);
+            if (match) return `actor${match[1]}`;
+        }
+    }
+    
+    // 6. 特殊处理消息线和注释
+    if (element.classList.contains('messageText') || 
+        element.classList.contains('labelText') ||
+        element.classList.contains('noteText')) {
+        // 对于消息文本，返回消息内容作为标识
+        const textContent = element.textContent?.trim();
+        if (textContent) {
+            return textContent.length > 20 ? textContent.substring(0, 20) + '...' : textContent;
+        }
+    }
+    
+    // 7. 最后的尝试：查找包含节点定义的文本
     const allText = element.textContent?.trim();
     if (allText) {
         // 如果文本很短（可能是节点ID），直接返回
         if (allText.length <= 10 && /^[A-Za-z0-9_]+$/.test(allText)) {
             return allText;
+        }
+        
+        // 对于较长的文本，截取前面部分作为标识
+        if (allText.length > 0) {
+            return allText.length > 15 ? allText.substring(0, 15) + '...' : allText;
         }
     }
     
