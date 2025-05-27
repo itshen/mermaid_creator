@@ -278,6 +278,17 @@ function setupEventListeners(quill) {
         // 获取当前Mermaid代码（如果有）
         const currentMermaidCode = quill.getText().trim();
         
+        // 构建包含当前代码的完整用户消息
+        let fullUserInput = input;
+        if (currentMermaidCode) {
+            fullUserInput = `${input}
+
+当前Mermaid代码：
+\`\`\`mermaid
+${currentMermaidCode}
+\`\`\``;
+        }
+        
         try {
             // 当前活跃的对话ID
             const activeConversationId = localStorage.getItem('activeConversationId') || createNewConversation();
@@ -292,7 +303,7 @@ function setupEventListeners(quill) {
                 let shouldAddUserMessage = true;
                 if (conversation.messages.length > 0) {
                     const lastMsg = conversation.messages[conversation.messages.length - 1];
-                    if (lastMsg.role === 'user' && lastMsg.content === input) {
+                    if (lastMsg.role === 'user' && lastMsg.content === fullUserInput) {
                         // 已经有相同内容的用户消息，不需要再添加
                         shouldAddUserMessage = false;
                         console.log('检测到重复的用户消息，跳过添加');
@@ -311,7 +322,7 @@ function setupEventListeners(quill) {
                     
                     conversation.messages.push({
                         role: 'user',
-                        content: input,
+                        content: fullUserInput,
                         timestamp: currentTime
                     });
                     
@@ -554,11 +565,11 @@ function setupEventListeners(quill) {
     });
     
     // 点击抽屉背景关闭
-    settingsDrawer.addEventListener('click', (e) => {
-        if (e.target === settingsDrawer) {
-            closeSettingsDrawer();
-        }
-    });
+    // settingsDrawer.addEventListener('click', (e) => {
+    //     if (e.target === settingsDrawer) {
+    //         closeSettingsDrawer();
+    //     }
+    // });
     
     versionsDrawer.addEventListener('click', (e) => {
         if (e.target === versionsDrawer) {
@@ -685,6 +696,17 @@ async function sendToAI(userInput, currentMermaidCode) {
     // 准备发送到AI的消息
     let messages = [];
     
+    // 构建包含当前代码的用户消息
+    let fullUserInput = userInput;
+    if (currentMermaidCode) {
+        fullUserInput = `${userInput}
+
+当前Mermaid代码：
+\`\`\`mermaid
+${currentMermaidCode}
+\`\`\``;
+    }
+    
     // 如果有现有对话，使用对话中的历史记录
     if (conversation && conversation.messages && conversation.messages.length > 0) {
         // 确保系统消息在第一位
@@ -692,7 +714,7 @@ async function sendToAI(userInput, currentMermaidCode) {
         if (systemMessage) {
             messages.push(systemMessage);
             
-            // 添加系统消息之后的所有历史消息（除了系统消息和最后一个AI响应）
+            // 添加系统消息之后的所有历史消息（除了系统消息）
             // 使用新数组避免直接修改原始消息
             const nonSystemMessages = conversation.messages
                 .filter(msg => msg.role !== 'system')
@@ -702,35 +724,20 @@ async function sendToAI(userInput, currentMermaidCode) {
             let hasCurrentUserMessage = false;
             if (nonSystemMessages.length > 0) {
                 const lastMsg = nonSystemMessages[nonSystemMessages.length - 1];
-                if (lastMsg.role === 'user' && lastMsg.content === userInput) {
+                if (lastMsg.role === 'user' && lastMsg.content === fullUserInput) {
                     hasCurrentUserMessage = true;
                 }
-            }
-            
-            // 移除最后一条AI消息，因为我们将使用当前编辑器中的代码
-            const lastAIMessageIndex = findLastIndexOfRole(nonSystemMessages, 'assistant');
-            if (lastAIMessageIndex !== -1) {
-                nonSystemMessages.splice(lastAIMessageIndex, 1);
             }
             
             // 添加历史消息
             messages = messages.concat(nonSystemMessages);
             
-            // 添加当前编辑器中的Mermaid代码作为最后一条AI消息
-            if (currentMermaidCode) {
-                messages.push({
-                    role: 'assistant',
-                    content: '```mermaid\n' + currentMermaidCode + '\n```',
-                    timestamp: currentTime
-                });
-            }
-            
             // 只有在历史消息中没有当前用户消息时才添加
             if (!hasCurrentUserMessage) {
-                // 添加当前用户输入
+                // 添加当前用户输入（包含当前代码）
                 messages.push({
                     role: 'user',
-                    content: userInput,
+                    content: fullUserInput,
                     timestamp: currentTime
                 });
             }
@@ -742,40 +749,25 @@ async function sendToAI(userInput, currentMermaidCode) {
                 timestamp: currentTime
             });
             
-            // 添加历史消息，但不包括最后一个AI响应
+            // 添加历史消息
             let historicalMessages = conversation.messages.slice(-20);
-            
-            // 移除最后一条AI消息，因为我们将使用当前编辑器中的代码
-            const lastAIMessageIndex = findLastIndexOfRole(historicalMessages, 'assistant');
-            if (lastAIMessageIndex !== -1) {
-                historicalMessages.splice(lastAIMessageIndex, 1);
-            }
             
             // 检查最后一条消息是否是当前要发送的用户消息
             let hasCurrentUserMessage = false;
             if (historicalMessages.length > 0) {
                 const lastMsg = historicalMessages[historicalMessages.length - 1];
-                if (lastMsg.role === 'user' && lastMsg.content === userInput) {
+                if (lastMsg.role === 'user' && lastMsg.content === fullUserInput) {
                     hasCurrentUserMessage = true;
                 }
             }
             
             messages = messages.concat(historicalMessages);
             
-            // 添加当前编辑器中的Mermaid代码作为最后一条AI消息
-            if (currentMermaidCode) {
-                messages.push({
-                    role: 'assistant',
-                    content: '```mermaid\n' + currentMermaidCode + '\n```',
-                    timestamp: currentTime
-                });
-            }
-            
             // 只有在历史消息中没有当前用户消息时才添加
             if (!hasCurrentUserMessage) {
                 messages.push({
                     role: 'user',
-                    content: userInput,
+                    content: fullUserInput,
                     timestamp: currentTime
                 });
             }
@@ -787,24 +779,13 @@ async function sendToAI(userInput, currentMermaidCode) {
                 role: 'system',
                 content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
                 timestamp: currentTime
+            },
+            {
+                role: 'user',
+                content: fullUserInput,
+                timestamp: currentTime
             }
         ];
-        
-        // 如果已有Mermaid代码，将其添加到消息中作为助手的前一个响应
-        if (currentMermaidCode) {
-            messages.push({
-                role: 'assistant',
-                content: '```mermaid\n' + currentMermaidCode + '\n```',
-                timestamp: currentTime
-            });
-        }
-        
-        // 添加当前用户输入
-        messages.push({
-            role: 'user',
-            content: userInput,
-            timestamp: currentTime
-        });
     }
 
     // 确保发送前检查并去除重复的消息
@@ -904,6 +885,19 @@ function extractMermaidCode(response) {
         console.log('响应类型:', typeof response);
         console.log('响应长度:', response.length);
         
+        // 如果响应本身就是一个对象，直接处理
+        if (typeof response === 'object' && response.content) {
+            console.log('检测到对象格式响应，直接处理content字段');
+            const content = response.content;
+            const mermaidRegex = /```mermaid\s*([\s\S]*?)\s*```/;
+            const match = content.match(mermaidRegex);
+            if (match) {
+                const extractedCode = match[1].trim();
+                console.log('从对象content中成功提取Mermaid代码:', extractedCode);
+                return extractedCode;
+            }
+        }
+        
         // 首先尝试使用正则表达式匹配mermaid代码块
         const mermaidRegex = /```mermaid\s*([\s\S]*?)\s*```/;
         const match = response.match(mermaidRegex);
@@ -916,14 +910,16 @@ function extractMermaidCode(response) {
         }
         
         // 如果正则匹配失败，检查是否为JSON响应（字符串形式）
-        if (response.includes('"content":')) {
+        if (response.includes('"content":') || response.includes('"role":')) {
             console.log('检测到JSON格式响应，尝试解析');
             try {
                 // 尝试解析为JSON
                 const jsonObj = JSON.parse(response);
                 console.log('JSON解析成功:', jsonObj);
+                
                 // 检查是否有content字段
                 if (jsonObj.content) {
+                    console.log('找到content字段:', jsonObj.content);
                     const contentMatch = jsonObj.content.match(mermaidRegex);
                     console.log('JSON content字段匹配结果:', contentMatch);
                     if (contentMatch) {
@@ -931,9 +927,31 @@ function extractMermaidCode(response) {
                         console.log('从JSON content中成功提取Mermaid代码:', extractedCode);
                         return extractedCode;
                     }
+                    
+                    // 如果没有匹配到mermaid代码块，但content包含mermaid关键字，尝试直接返回content
+                    if (jsonObj.content.includes('graph') || jsonObj.content.includes('flowchart') || 
+                        jsonObj.content.includes('sequenceDiagram') || jsonObj.content.includes('classDiagram') ||
+                        jsonObj.content.includes('stateDiagram') || jsonObj.content.includes('pie') ||
+                        jsonObj.content.includes('gantt') || jsonObj.content.includes('timeline')) {
+                        console.log('content包含Mermaid关键字，直接返回content');
+                        return jsonObj.content.trim();
+                    }
+                }
+                
+                // 检查是否有其他可能的字段包含mermaid代码
+                for (const key in jsonObj) {
+                    if (typeof jsonObj[key] === 'string' && jsonObj[key].includes('```mermaid')) {
+                        const keyMatch = jsonObj[key].match(mermaidRegex);
+                        if (keyMatch) {
+                            const extractedCode = keyMatch[1].trim();
+                            console.log(`从JSON ${key}字段中成功提取Mermaid代码:`, extractedCode);
+                            return extractedCode;
+                        }
+                    }
                 }
             } catch (e) {
                 console.warn('响应不是有效的JSON:', e);
+                console.log('原始响应内容:', response);
             }
         }
         
@@ -953,6 +971,32 @@ function extractMermaidCode(response) {
                 extractedCode.includes('gantt') || extractedCode.includes('timeline')) {
                 return extractedCode;
             }
+        }
+        
+        // 最后尝试：如果响应包含明显的Mermaid关键字，直接返回
+        if (response.includes('graph TD') || response.includes('graph LR') || 
+            response.includes('flowchart') || response.includes('sequenceDiagram') ||
+            response.includes('classDiagram') || response.includes('stateDiagram') ||
+            response.includes('pie title') || response.includes('gantt') ||
+            response.includes('timeline')) {
+            console.log('检测到Mermaid关键字，尝试清理并返回');
+            // 移除可能的JSON格式包装
+            let cleanedResponse = response;
+            if (response.startsWith('{') && response.endsWith('}')) {
+                try {
+                    const parsed = JSON.parse(response);
+                    if (parsed.content) {
+                        cleanedResponse = parsed.content;
+                    }
+                } catch (e) {
+                    // 忽略解析错误，使用原始响应
+                }
+            }
+            
+            // 移除可能的代码块标记
+            cleanedResponse = cleanedResponse.replace(/```mermaid\s*/, '').replace(/\s*```$/, '');
+            
+            return cleanedResponse.trim();
         }
         
         // 如果以上方法都失败，直接返回响应内容
@@ -1979,14 +2023,14 @@ function loadVersion(version) {
             
             // 保存回localStorage（只更新标记，不删除历史）
             updateConversation(activeConversationId, conversation, false);
+            
+            // 更新版本列表以反映当前活动版本
+            loadVersions();
         }
     }
     
-    // 可选：关闭版本抽屉
-    const versionsDrawer = document.getElementById('versionsDrawer');
-    if (versionsDrawer) {
-        versionsDrawer.classList.add('hidden');
-    }
+    // 使用正确的关闭函数来关闭版本抽屉
+    closeVersionsDrawer();
 }
 
 // 更新最后用户输入显示
@@ -3624,18 +3668,31 @@ async function sendNodeEditToAI(aiRequest, userRequest) {
         if (conversation) {
             const currentTime = new Date().toISOString();
             
-            // 添加用户消息
-            conversation.messages.push({
-                role: 'user',
-                content: aiRequest,
-                timestamp: currentTime
-            });
+            // 检查最后一条消息是否已经是相同内容的用户消息，避免重复添加
+            let shouldAddUserMessage = true;
+            if (conversation.messages.length > 0) {
+                const lastMsg = conversation.messages[conversation.messages.length - 1];
+                if (lastMsg.role === 'user' && lastMsg.content === aiRequest) {
+                    // 已经有相同内容的用户消息，不需要再添加
+                    shouldAddUserMessage = false;
+                    console.log('检测到重复的编辑节点用户消息，跳过添加');
+                }
+            }
             
-            // 保存用户消息
-            updateConversation(activeConversationId, conversation, false);
+            // 只有在需要添加时才添加用户消息
+            if (shouldAddUserMessage) {
+                conversation.messages.push({
+                    role: 'user',
+                    content: aiRequest,
+                    timestamp: currentTime
+                });
+                
+                // 保存用户消息
+                updateConversation(activeConversationId, conversation, false);
+            }
             
-            // 发送到AI
-            const result = await sendToAI(aiRequest, quill.getText().trim());
+            // 发送到AI获取响应 - 不传递currentMermaidCode，因为aiRequest已经包含了代码
+            const result = await sendToAI(aiRequest, null);
             
             // 提取Mermaid代码
             const mermaidCode = extractMermaidCode(result);
@@ -3648,27 +3705,52 @@ async function sendNodeEditToAI(aiRequest, userRequest) {
                 // 更新预览
                 updateMermaidPreview(mermaidCode);
                 
-                // 添加AI响应
-                conversation.messages.push({
-                    role: 'assistant',
-                    content: result,
-                    timestamp: new Date().toISOString()
-                });
+                // 重新获取对话以确保获取最新状态
+                const updatedConversation = getConversation(activeConversationId);
                 
-                // 添加版本
-                const versionName = `编辑节点: ${userRequest.substring(0, 20)}${userRequest.length > 20 ? '...' : ''}`;
-                const newVersion = addVersion(conversation, versionName, aiRequest, mermaidCode);
-                
-                // 将新版本设置为当前版本
-                if (newVersion) {
-                    conversation.currentVersionId = newVersion.id;
+                if (updatedConversation) {
+                    // 检查是否有重复的AI响应，确保不会添加重复消息
+                    const lastUserMsgIndex = findLastIndexOfRole(updatedConversation.messages, 'user');
+                    let shouldAddResponse = true;
+                    
+                    if (lastUserMsgIndex !== -1) {
+                        // 检查最后一个用户消息后面是否已经有助手响应
+                        if (lastUserMsgIndex + 1 < updatedConversation.messages.length && 
+                            updatedConversation.messages[lastUserMsgIndex + 1].role === 'assistant') {
+                            // 已经有响应，更新而不是添加
+                            updatedConversation.messages[lastUserMsgIndex + 1] = {
+                                role: 'assistant',
+                                content: result,
+                                timestamp: new Date().toISOString()
+                            };
+                            shouldAddResponse = false;
+                        }
+                    }
+                    
+                    // 如果需要添加新响应
+                    if (shouldAddResponse) {
+                        updatedConversation.messages.push({
+                            role: 'assistant',
+                            content: result,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                    
+                    // 添加版本
+                    const versionName = `编辑节点: ${userRequest.substring(0, 20)}${userRequest.length > 20 ? '...' : ''}`;
+                    const newVersion = addVersion(updatedConversation, versionName, aiRequest, mermaidCode);
+                    
+                    // 将新版本设置为当前版本
+                    if (newVersion) {
+                        updatedConversation.currentVersionId = newVersion.id;
+                    }
+                    
+                    // 保存对话
+                    updateConversation(activeConversationId, updatedConversation, false);
+                    
+                    // 更新版本列表
+                    loadVersions();
                 }
-                
-                // 保存对话
-                updateConversation(activeConversationId, conversation, false);
-                
-                // 更新版本列表
-                loadVersions();
                 
                 // 重新添加事件监听器
                 setTimeout(() => {
@@ -3892,4 +3974,22 @@ function clearHighlights() {
     // 移除按钮
     removeAIEditButton();
     removeAIEditInput();
+}
+
+// 关闭版本抽屉的全局函数
+function closeVersionsDrawer() {
+    const versionsDrawer = document.getElementById('versionsDrawer');
+    if (!versionsDrawer) return;
+    
+    // 滑出抽屉
+    const drawerContent = versionsDrawer.querySelector('div');
+    if (drawerContent) {
+        drawerContent.classList.add('translate-x-full');
+        // 等待过渡完成后隐藏背景
+        setTimeout(() => {
+            versionsDrawer.classList.add('hidden');
+        }, 300);
+    } else {
+        versionsDrawer.classList.add('hidden');
+    }
 }

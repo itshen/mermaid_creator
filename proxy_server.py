@@ -67,8 +67,7 @@ class ProxyHandler(SimpleHTTPRequestHandler):
         target_url = 'https://openrouter.ai/api/v1/chat/completions'
         headers = {
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer {api_key}',
-            'HTTP-Referer': 'http://localhost:8000',
+            'Authorization': f'Bearer {api_key}'
         }
         
         data = {
