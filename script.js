@@ -2736,7 +2736,7 @@ function setupElementHighlight(quill) {
                 return element.classList.contains('node') ? element : element.parentElement;
             }
             
-            // 检查是否是时序图元素
+            // 检查是否是时序图元素 - 扩展识别
             if (element.classList.contains('actor') ||
                 element.classList.contains('activation') ||
                 element.classList.contains('note') ||
@@ -2744,19 +2744,60 @@ function setupElementHighlight(quill) {
                 element.classList.contains('labelText') ||
                 element.classList.contains('messageText') ||
                 element.classList.contains('sequenceNumber') ||
+                element.classList.contains('actor-line') ||
+                element.classList.contains('actor-man') ||
+                element.classList.contains('messageLine0') ||
+                element.classList.contains('messageLine1') ||
+                element.classList.contains('noteGroup') ||
+                element.classList.contains('noteText') ||
                 element.parentElement?.classList.contains('actor') ||
                 element.parentElement?.classList.contains('activation') ||
-                element.parentElement?.classList.contains('note')) {
+                element.parentElement?.classList.contains('note') ||
+                element.parentElement?.classList.contains('noteGroup')) {
+                
                 // 对于时序图，返回最合适的父元素
                 if (element.classList.contains('actor') || 
                     element.classList.contains('activation') || 
-                    element.classList.contains('note')) {
+                    element.classList.contains('note') ||
+                    element.classList.contains('noteGroup')) {
                     return element;
                 } else if (element.parentElement?.classList.contains('actor') ||
                           element.parentElement?.classList.contains('activation') ||
-                          element.parentElement?.classList.contains('note')) {
+                          element.parentElement?.classList.contains('note') ||
+                          element.parentElement?.classList.contains('noteGroup')) {
                     return element.parentElement;
                 } else {
+                    // 对于消息文本等，返回自身
+                    return element;
+                }
+            }
+            
+            // 检查是否包含时序图相关的ID或类名模式
+            if (element.id && (element.id.includes('actor') || 
+                              element.id.includes('sequence') ||
+                              element.id.includes('note') ||
+                              element.id.includes('activation'))) {
+                return element;
+            }
+            
+            // 检查是否是文本元素但在时序图上下文中
+            if (element.tagName === 'text' || element.tagName === 'tspan') {
+                // 查找最近的时序图相关父元素
+                let parent = element.parentElement;
+                while (parent && parent !== preview) {
+                    if (parent.classList.contains('actor') ||
+                        parent.classList.contains('note') ||
+                        parent.classList.contains('activation') ||
+                        parent.classList.contains('noteGroup') ||
+                        parent.id?.includes('actor') ||
+                        parent.id?.includes('note')) {
+                        return parent;
+                    }
+                    parent = parent.parentElement;
+                }
+                // 如果找不到特定父元素，但在时序图中，返回文本元素本身
+                const svg = element.closest('svg');
+                if (svg && svg.innerHTML.includes('sequenceDiagram')) {
                     return element;
                 }
             }
@@ -2872,7 +2913,7 @@ function setupElementHighlight(quill) {
     // 在编辑器中高亮对应代码
     function highlightCodeInEditor(element, quill) {
         const nodeId = getNodeId(element);
-        const nodeText = element.querySelector('.nodeLabel, .label, foreignObject > div, .actor-text, .messageText, .labelText, .noteText, text')?.textContent?.trim();
+        const nodeText = element.querySelector('.nodeLabel, .label, foreignObject > div, .actor-text, .messageText, .labelText, .noteText, text, tspan')?.textContent?.trim();
         
         if (!nodeId && !nodeText) return;
         
@@ -2885,8 +2926,11 @@ function setupElementHighlight(quill) {
             // 跳过空行和纯注释行
             if (!line.trim() || line.trim().startsWith('%%')) return;
             
+            // 检查是否是时序图
+            const isSequenceDiagram = text.includes('sequenceDiagram');
+            
             // 1. 精确匹配节点ID（流程图模式）
-            if (nodeId) {
+            if (nodeId && !isSequenceDiagram) {
                 // 流程图节点定义模式
                 const flowchartNodeDefPatterns = [
                     new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*\\[`),  // A[文本]
@@ -2907,47 +2951,70 @@ function setupElementHighlight(quill) {
                     new RegExp(`==>\\s*${escapeRegExp(nodeId)}\\s*`),   // A ==> B
                 ];
                 
-                // 时序图participant模式
-                const sequenceParticipantPatterns = [
-                    new RegExp(`^\\s*participant\\s+${escapeRegExp(nodeId)}\\s*$`),  // participant A
-                    new RegExp(`^\\s*participant\\s+${escapeRegExp(nodeId)}\\s+as\\s+`), // participant A as 别名
-                ];
-                
-                // 时序图消息模式
-                const sequenceMessagePatterns = [
-                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*->>\\s*`),    // A->>B
-                    new RegExp(`\\s*->>\\s*${escapeRegExp(nodeId)}\\s*:`),    // A->>B:
-                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*-->>\\s*`),   // A-->>B
-                    new RegExp(`\\s*-->>\\s*${escapeRegExp(nodeId)}\\s*:`),   // A-->>B:
-                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*-\\)\\s*`),   // A-)B
-                    new RegExp(`\\s*-\\)\\s*${escapeRegExp(nodeId)}\\s*:`),   // A-)B:
-                    new RegExp(`^\\s*${escapeRegExp(nodeId)}\\s*--\\)\\s*`),  // A--)B
-                    new RegExp(`\\s*--\\)\\s*${escapeRegExp(nodeId)}\\s*:`),  // A--)B:
-                ];
-                
-                // 时序图注释模式
-                const sequenceNotePatterns = [
-                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+${escapeRegExp(nodeId)}\\s*:`), // Note over A:
-                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+${escapeRegExp(nodeId)}\\s*,`), // Note over A,B:
-                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+.*,\\s*${escapeRegExp(nodeId)}\\s*:`), // Note over B,A:
-                ];
-                
-                // 检查是否匹配任何模式
-                const allPatterns = [
-                    ...flowchartNodeDefPatterns, 
-                    ...flowchartNodeRefPatterns,
-                    ...sequenceParticipantPatterns,
-                    ...sequenceMessagePatterns,
-                    ...sequenceNotePatterns
-                ];
-                
-                const isMatch = allPatterns.some(pattern => pattern.test(line));
+                // 检查是否匹配任何流程图模式
+                const allFlowchartPatterns = [...flowchartNodeDefPatterns, ...flowchartNodeRefPatterns];
+                const isMatch = allFlowchartPatterns.some(pattern => pattern.test(line));
                 if (isMatch) {
                     matchingLines.push(index);
                 }
             }
             
-            // 2. 如果有节点文本，也尝试匹配
+            // 2. 时序图模式匹配
+            if (isSequenceDiagram && (nodeId || nodeText)) {
+                const searchText = nodeId || nodeText;
+                const escapedText = escapeRegExp(searchText);
+                
+                // 时序图participant模式
+                const sequenceParticipantPatterns = [
+                    new RegExp(`^\\s*participant\\s+${escapedText}\\s*$`),  // participant A
+                    new RegExp(`^\\s*participant\\s+${escapedText}\\s+as\\s+`), // participant A as 别名
+                    new RegExp(`^\\s*participant\\s+\\w+\\s+as\\s+${escapedText}\\s*$`), // participant X as A
+                ];
+                
+                // 时序图消息模式 - 支持中文和各种箭头
+                const sequenceMessagePatterns = [
+                    new RegExp(`^\\s*${escapedText}\\s*->>\\s*`),    // A->>B
+                    new RegExp(`\\s*->>\\s*${escapedText}\\s*:`),    // A->>B:
+                    new RegExp(`^\\s*${escapedText}\\s*-->>\\s*`),   // A-->>B
+                    new RegExp(`\\s*-->>\\s*${escapedText}\\s*:`),   // A-->>B:
+                    new RegExp(`^\\s*${escapedText}\\s*-\\)\\s*`),   // A-)B
+                    new RegExp(`\\s*-\\)\\s*${escapedText}\\s*:`),   // A-)B:
+                    new RegExp(`^\\s*${escapedText}\\s*--\\)\\s*`),  // A--)B
+                    new RegExp(`\\s*--\\)\\s*${escapedText}\\s*:`),  // A--)B:
+                    new RegExp(`^\\s*${escapedText}\\s*->\\s*`),     // A->B
+                    new RegExp(`\\s*->\\s*${escapedText}\\s*:`),     // A->B:
+                    new RegExp(`^\\s*${escapedText}\\s*-->\\s*`),    // A-->B
+                    new RegExp(`\\s*-->\\s*${escapedText}\\s*:`),    // A-->B:
+                ];
+                
+                // 时序图注释模式
+                const sequenceNotePatterns = [
+                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+${escapedText}\\s*:`), // Note over A:
+                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+${escapedText}\\s*,`), // Note over A,B:
+                    new RegExp(`^\\s*Note\\s+(left|right|over)\\s+.*,\\s*${escapedText}\\s*:`), // Note over B,A:
+                ];
+                
+                // 消息文本匹配 - 如果点击的是消息文本
+                const messageTextPatterns = [
+                    new RegExp(`:\\s*${escapedText}\\s*$`), // 消息文本在行尾
+                    new RegExp(`:\\s*.*${escapedText}.*$`), // 消息文本包含在内容中
+                ];
+                
+                // 检查是否匹配任何时序图模式
+                const allSequencePatterns = [
+                    ...sequenceParticipantPatterns,
+                    ...sequenceMessagePatterns,
+                    ...sequenceNotePatterns,
+                    ...messageTextPatterns
+                ];
+                
+                const isMatch = allSequencePatterns.some(pattern => pattern.test(line));
+                if (isMatch) {
+                    matchingLines.push(index);
+                }
+            }
+            
+            // 3. 如果有节点文本，也尝试通用文本匹配
             if (nodeText && !matchingLines.includes(index)) {
                 // 转义特殊字符
                 const escapedText = escapeRegExp(nodeText);
@@ -2967,6 +3034,7 @@ function setupElementHighlight(quill) {
                     new RegExp(`participant\\s+\\w+\\s+as\\s+${escapedText}`), // participant A as 文本
                     new RegExp(`:\\s*${escapedText}\\s*$`), // 消息文本
                     new RegExp(`Note\\s+\\w+\\s+\\w+\\s*:\\s*${escapedText}`), // Note文本
+                    new RegExp(`${escapedText}`), // 直接文本匹配
                 ];
                 
                 const allTextPatterns = [...flowchartTextPatterns, ...sequenceTextPatterns];
@@ -3022,6 +3090,35 @@ function setupElementHighlight(quill) {
 
 // 显示AI编辑按钮
 function showAIEditButton(element) {
+    // 检测节点类型
+    const nodeType = detectNodeType(element);
+    
+    // 对于时序图等特殊图表类型，只在特定元素上显示编辑按钮
+    if (nodeType.includes('时序图') || nodeType.includes('类图') || nodeType.includes('状态图')) {
+        // 对于时序图等，只在文本元素或特定的可编辑元素上显示按钮
+        const isEditableElement = 
+            element.tagName === 'text' || 
+            element.tagName === 'tspan' ||
+            element.classList.contains('messageText') ||
+            element.classList.contains('labelText') ||
+            element.classList.contains('noteText') ||
+            element.classList.contains('actor-text');
+            
+        if (!isEditableElement) {
+            // 对于时序图的框框等形状元素，不显示编辑按钮
+            return;
+        }
+    }
+    
+    // 对于流程图，如果是未知类型则不显示编辑按钮
+    if (nodeType === '未知' || nodeType === '默认') {
+        // 但是如果是文本元素且能获取到有效的nodeId，仍然显示
+        const nodeId = getNodeId(element);
+        if (!nodeId || nodeId.trim() === '') {
+            return;
+        }
+    }
+    
     // 如果按钮已经存在且位置正确，不重复创建
     const existingButton = document.getElementById('ai-edit-button');
     if (existingButton) {
@@ -3062,8 +3159,20 @@ function showAIEditButton(element) {
     
     // 设置按钮位置（在元素右上角）
     editButton.style.position = 'absolute';
-    editButton.style.left = `${rect.right - previewRect.left - 12 + scrollLeft}px`;
-    editButton.style.top = `${rect.top - previewRect.top - 12 + scrollTop}px`;
+    
+    // 对于文本元素，调整按钮位置避免遮挡文字
+    if (element.tagName === 'text' || element.tagName === 'tspan' || 
+        element.classList.contains('messageText') ||
+        element.classList.contains('labelText') ||
+        element.classList.contains('noteText')) {
+        // 对于文本元素，将按钮放在文本右侧，稍微偏下一点
+        editButton.style.left = `${rect.right - previewRect.left + 5 + scrollLeft}px`;
+        editButton.style.top = `${rect.top - previewRect.top + (rect.height / 2) - 16 + scrollTop}px`;
+    } else {
+        // 对于其他元素，保持原来的位置（右上角）
+        editButton.style.left = `${rect.right - previewRect.left - 12 + scrollLeft}px`;
+        editButton.style.top = `${rect.top - previewRect.top - 12 + scrollTop}px`;
+    }
     
     // 添加到预览区
     preview.style.position = 'relative';
@@ -3501,7 +3610,7 @@ function getNodeId(element) {
             const actorMatch = elementId.match(/actor(\d+)/);
             if (actorMatch) {
                 // 尝试从文本内容获取实际的participant名称
-                const textElement = element.querySelector('.actor-text, text');
+                const textElement = element.querySelector('.actor-text, text, tspan');
                 if (textElement && textElement.textContent) {
                     return textElement.textContent.trim();
                 }
@@ -3541,7 +3650,7 @@ function getNodeId(element) {
     }
     
     // 4. 查找节点内的文本标签
-    const labelElement = element.querySelector('.nodeLabel, .label, foreignObject > div, .actor-text, .messageText, .labelText, .noteText, text');
+    const labelElement = element.querySelector('.nodeLabel, .label, foreignObject > div, .actor-text, .messageText, .labelText, .noteText, text, tspan');
     if (labelElement) {
         // 获取文本内容，但需要处理可能包含的HTML
         const textContent = labelElement.textContent?.trim();
@@ -3549,6 +3658,15 @@ function getNodeId(element) {
         // 对于时序图的actor，文本内容就是ID
         if (element.classList.contains('actor') && textContent) {
             return textContent;
+        }
+        
+        // 对于时序图的文本元素，直接使用文本内容
+        if ((element.tagName === 'text' || element.tagName === 'tspan') && textContent) {
+            // 检查是否在时序图上下文中
+            const svg = element.closest('svg');
+            if (svg && (svg.innerHTML.includes('sequenceDiagram') || svg.innerHTML.includes('participant'))) {
+                return textContent;
+            }
         }
         
         // 尝试从父元素的属性中找到对应的节点ID
@@ -3565,9 +3683,9 @@ function getNodeId(element) {
     }
     
     // 5. 特殊处理时序图元素
-    if (element.classList.contains('actor')) {
+    if (element.classList.contains('actor') || element.id?.includes('actor')) {
         // 对于actor元素，尝试从文本获取participant名称
-        const actorText = element.querySelector('.actor-text, text');
+        const actorText = element.querySelector('.actor-text, text, tspan');
         if (actorText && actorText.textContent) {
             return actorText.textContent.trim();
         }
@@ -3580,7 +3698,20 @@ function getNodeId(element) {
         }
     }
     
-    // 6. 特殊处理消息线和注释
+    // 6. 特殊处理时序图文本元素
+    if (element.tagName === 'text' || element.tagName === 'tspan') {
+        const textContent = element.textContent?.trim();
+        if (textContent) {
+            // 检查是否在时序图上下文中
+            const svg = element.closest('svg');
+            if (svg && (svg.innerHTML.includes('sequenceDiagram') || svg.innerHTML.includes('participant'))) {
+                // 对于时序图中的文本，直接返回文本内容作为ID
+                return textContent.length > 20 ? textContent.substring(0, 20) + '...' : textContent;
+            }
+        }
+    }
+    
+    // 7. 特殊处理消息线和注释
     if (element.classList.contains('messageText') || 
         element.classList.contains('labelText') ||
         element.classList.contains('noteText')) {
@@ -3591,11 +3722,11 @@ function getNodeId(element) {
         }
     }
     
-    // 7. 最后的尝试：查找包含节点定义的文本
+    // 8. 最后的尝试：查找包含节点定义的文本
     const allText = element.textContent?.trim();
     if (allText) {
         // 如果文本很短（可能是节点ID），直接返回
-        if (allText.length <= 10 && /^[A-Za-z0-9_]+$/.test(allText)) {
+        if (allText.length <= 10 && /^[A-Za-z0-9_\u4e00-\u9fa5]+$/.test(allText)) {
             return allText;
         }
         
