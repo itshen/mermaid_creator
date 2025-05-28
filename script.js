@@ -701,10 +701,16 @@ async function sendToAI(userInput, currentMermaidCode) {
     if (currentMermaidCode) {
         fullUserInput = `${userInput}
 
-当前Mermaid代码：
+请注意以下要点：
+- 如果需要修改现有内容，请提供修改后的完整 mermaid 代码。
+- 如果需要添加新的内容，请提供完整的 mermaid 代码。
+
+当前完整代码：
 \`\`\`mermaid
 ${currentMermaidCode}
-\`\`\``;
+\`\`\`
+
+请只修改指定的部分，保持其他部分不变。返回修改后的完整Mermaid代码。`;
     }
     
     // 如果有现有对话，使用对话中的历史记录
@@ -745,7 +751,7 @@ ${currentMermaidCode}
             // 如果没有系统消息，添加默认系统消息
             messages.push({
                 role: 'system',
-                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
+                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **样式美化**：\n   - 可以使用classDef定义样式类，为不同类型的节点设置不同的颜色和样式\n   - 使用class语句将样式应用到指定节点\n   - 样式示例：\n     ```\n     %% 样式定义\n     classDef startEnd fill:#e1f5fe,stroke:#0277bd,stroke-width:2px\n     classDef process fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px\n     classDef decision fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px\n     \n     %% 应用样式\n     class A,G startEnd\n     class B,D,F process\n     class C,E decision\n     ```\n   - 常用颜色搭配：蓝色系(#e1f5fe)表示开始结束，紫色系(#f3e5f5)表示处理过程，绿色系(#e8f5e8)表示判断决策\n\n5. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
                 timestamp: currentTime
             });
             
@@ -777,7 +783,7 @@ ${currentMermaidCode}
         messages = [
             {
                 role: 'system',
-                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
+                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **样式美化**：\n   - 可以使用classDef定义样式类，为不同类型的节点设置不同的颜色和样式\n   - 使用class语句将样式应用到指定节点\n   - 样式示例：\n     ```\n     %% 样式定义\n     classDef startEnd fill:#e1f5fe,stroke:#0277bd,stroke-width:2px\n     classDef process fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px\n     classDef decision fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px\n     \n     %% 应用样式\n     class A,G startEnd\n     class B,D,F process\n     class C,E decision\n     ```\n   - 常用颜色搭配：蓝色系(#e1f5fe)表示开始结束，紫色系(#f3e5f5)表示处理过程，绿色系(#e8f5e8)表示判断决策\n\n5. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
                 timestamp: currentTime
             },
             {
@@ -2274,7 +2280,7 @@ function createExampleConversations() {
     const currentTime = new Date().toISOString();
     
     // 系统消息模板
-    const systemPrompt = '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。';
+    const systemPrompt = '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户的需求智能选择最合适的图表类型（流程图、时序图、类图、状态图等）\n   - 如果用户已提供了Mermaid代码或指定了图表类型，请保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文括号"（）"而非英文括号"()"\n   - 避免在节点文本中使用特殊字符如: [],(),{},&,#等，用中文对应符号替代\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **样式美化**：\n   - 可以使用classDef定义样式类，为不同类型的节点设置不同的颜色和样式\n   - 使用class语句将样式应用到指定节点\n   - 样式示例：\n     ```\n     %% 样式定义\n     classDef startEnd fill:#e1f5fe,stroke:#0277bd,stroke-width:2px\n     classDef process fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px\n     classDef decision fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px\n     \n     %% 应用样式\n     class A,G startEnd\n     class B,D,F process\n     class C,E decision\n     ```\n   - 常用颜色搭配：蓝色系(#e1f5fe)表示开始结束，紫色系(#f3e5f5)表示处理过程，绿色系(#e8f5e8)表示判断决策\n\n5. **错误修复**：\n   - 当遇到Mermaid解析错误时，请仔细分析错误信息和位置\n   - 常见错误包括：语法错误、括号不匹配、箭头方向错误、缺少必要元素\n   - 修复时确保保留原图表的逻辑和结构\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。';
     
     // 创建系统使用说明示例 - 确保语法完全正确
     const tutorialId = Date.now().toString();
@@ -2344,11 +2350,11 @@ function createExampleConversations() {
     // 创建保存所有示例对话的数组
     const exampleConversations = [tutorialConversation];
     
-    // 为每个示例创建对话 - 只添加几个简单的例子，降低首次加载的复杂度
-    // 选择几个较为简单的图表类型
-    const simpleExampleKeys = ['flowchart', 'pie'];
+    // 为每个示例创建对话 - 包含所有示例类型
+    // 获取所有示例的键名
+    const allExampleKeys = Object.keys(examples);
     
-    simpleExampleKeys.forEach((key, index) => {
+    allExampleKeys.forEach((key, index) => {
         const example = examples[key];
         if (!example) return;
         
@@ -2576,7 +2582,7 @@ function loadExamples() {
     "出版费" : 3.0
     "其他" : 1.3`
         },
-        radar: {
+        timeline: {
             name: "通义千问发展时间线",
             code: `timeline
     title 通义千问(Qwen)发展时间线
