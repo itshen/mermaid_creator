@@ -751,7 +751,56 @@ ${currentMermaidCode}
             // 如果没有系统消息，添加默认系统消息
             messages.push({
                 role: 'system',
-                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户需求智能选择最合适的图表类型（flowchart、sequenceDiagram、classDiagram、stateDiagram、gantt、pie等）\n   - 如果用户已提供Mermaid代码或指定图表类型，保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文全角括号"（）"而非英文半角括号"()"\n   - 避免在节点文本中使用特殊字符如：[]，()，{}，&，#，%，$等，用中文对应符号或描述替代\n   - 避免使用Mermaid保留关键字作为节点ID或样式类名（如：end、start、class、subgraph、direction等）\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 每个连接关系独占一行，避免在同一行中连续使用多个箭头\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **样式美化**：\n   - 使用classDef定义样式类，为不同类型或环节的节点设置不同颜色和样式\n   - 使用:::语法直接为节点应用样式类\n   - 样式类名避免使用保留关键字，推荐使用描述性名称如：startNode、processNode、decisionNode、warningNode、errorNode等\n   - 样式格式规范：fill填充色，stroke边框色，stroke-width边框宽度，color文字颜色\n   - 样式示例：\n     ```\n     classDef startNode fill:#e1f5fe,stroke:#0277bd,stroke-width:2px\n     classDef processNode fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px\n     classDef decisionNode fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px\n     classDef warningNode fill:#fff3e0,stroke:#f57c00,stroke-width:2px\n     classDef errorNode fill:#ffebee,stroke:#d32f2f,stroke-width:2px\n     ```\n   - 颜色可根据不同业务环节、部门、状态等进行区分，只要确保格式规范即可\n\n5. **异常规避**：\n   - 避免使用中文作为节点ID\n   - 节点文本长度控制在合理范围内，过长文本使用换行符\\n分割\n   - 确保图表结构完整，避免悬空节点\n   - 检查语法完整性，确保所有节点都有合适的连接\n   - 特殊字符处理：将&替换为"和"，%替换为"百分比"，#替换为"号"等\n   - 避免在同一条语句中混用不同的连接符号\n\n6. **错误修复**：\n   - 仔细分析Mermaid解析错误信息和错误位置\n   - 常见错误：语法错误、括号不匹配、箭头方向错误、保留关键字冲突、特殊字符冲突\n   - 修复时确保保留原图表的逻辑和结构\n   - 检查节点引用一致性，确保所有被引用的节点都已定义\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
+                content: `你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。
+
+请注意以下要点：
+
+1. **图表类型选择**：
+   - 根据用户需求智能选择最合适的图表类型（flowchart、sequenceDiagram、classDiagram、stateDiagram、gantt、pie等）
+   - 如果用户已提供Mermaid代码或指定图表类型，保持该类型不变，除非用户明确要求更改
+
+2. **语法规范**：
+   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符
+   - 连接关系必须使用英文符号和标识符
+   - 节点文本中使用中文全角括号"（）"而非英文半角括号"()"
+   - 避免在节点文本中使用特殊字符如：[]，()，{}，&，#，%，$等，用中文对应符号或描述替代
+   - 避免使用Mermaid保留关键字作为节点ID或样式类名（如：end、start、class、subgraph、direction等）
+
+3. **代码质量**：
+   - 确保所有引号、括号配对完整
+   - 每个连接关系独占一行，避免在同一行中连续使用多个箭头
+   - 排版清晰，注意节点间距和布局美观
+   - 添加适当的注释帮助理解复杂图表
+
+4. **样式美化**：
+   - 使用style语法直接为节点设置样式，格式为：style 节点ID fill:颜色,stroke:边框色,stroke-width:边框宽度
+   - 样式格式规范：fill填充色，stroke边框色，stroke-width边框宽度，color文字颜色
+   - 样式示例：
+     \`\`\`
+     %% 样式定义
+     style A fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+     style B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+     style C fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+     style D fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+     style E fill:#ffebee,stroke:#d32f2f,stroke-width:1px
+     \`\`\`
+   - 颜色可根据不同业务环节、部门、状态等进行区分，只要确保格式规范即可
+
+5. **异常规避**：
+   - 避免使用中文作为节点ID
+   - 节点文本长度控制在合理范围内，过长文本使用换行符\\n分割
+   - 确保图表结构完整，避免悬空节点
+   - 检查语法完整性，确保所有节点都有合适的连接
+   - 特殊字符处理：将&替换为"和"，%替换为"百分比"，#替换为"号"等
+   - 避免在同一条语句中混用不同的连接符号
+
+6. **错误修复**：
+   - 仔细分析Mermaid解析错误信息和错误位置
+   - 常见错误：语法错误、括号不匹配、箭头方向错误、保留关键字冲突、特殊字符冲突
+   - 修复时确保保留原图表的逻辑和结构
+   - 检查节点引用一致性，确保所有被引用的节点都已定义
+
+请仅返回被\`\`\`mermaid和\`\`\`包裹的代码，不要返回其他解释或内容。`,
                 timestamp: currentTime
             });
             
@@ -783,7 +832,56 @@ ${currentMermaidCode}
         messages = [
             {
                 role: 'system',
-                content: '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户需求智能选择最合适的图表类型（flowchart、sequenceDiagram、classDiagram、stateDiagram、gantt、pie等）\n   - 如果用户已提供Mermaid代码或指定图表类型，保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文全角括号"（）"而非英文半角括号"()"\n   - 避免在节点文本中使用特殊字符如：[]，()，{}，&，#，%，$等，用中文对应符号或描述替代\n   - 避免使用Mermaid保留关键字作为节点ID或样式类名（如：end、start、class、subgraph、direction等）\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 每个连接关系独占一行，避免在同一行中连续使用多个箭头\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **样式美化**：\n   - 使用classDef定义样式类，为不同类型或环节的节点设置不同颜色和样式\n   - 使用:::语法直接为节点应用样式类，或使用class语句批量应用\n   - 样式类名避免使用保留关键字，推荐使用描述性名称如：startNode、processNode、decisionNode、warningNode、errorNode等\n   - 样式格式规范：fill填充色，stroke边框色，stroke-width边框宽度，color文字颜色\n   - 样式示例：\n     ```\n     %% 样式定义\n     classDef startNode fill:#e1f5fe,stroke:#0277bd,stroke-width:2px\n     classDef processNode fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px\n     classDef decisionNode fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px\n     classDef warningNode fill:#fff3e0,stroke:#f57c00,stroke-width:2px\n     \n     %% 应用样式\n     class A,G startNode\n     class B,D,F processNode\n     class C,E decisionNode\n     ```\n   - 颜色可根据不同业务环节、部门、状态等进行区分，只要确保格式规范即可\n\n5. **异常规避**：\n   - 避免使用中文作为节点ID\n   - 节点文本长度控制在合理范围内，过长文本使用换行符\\n分割\n   - 确保图表结构完整，避免悬空节点\n   - 检查语法完整性，确保所有节点都有合适的连接\n   - 特殊字符处理：将&替换为"和"，%替换为"百分比"，#替换为"号"等\n   - 避免在同一条语句中混用不同的连接符号\n\n6. **错误修复**：\n   - 仔细分析Mermaid解析错误信息和错误位置\n   - 常见错误：语法错误、括号不匹配、箭头方向错误、保留关键字冲突、特殊字符冲突\n   - 修复时确保保留原图表的逻辑和结构\n   - 检查节点引用一致性，确保所有被引用的节点都已定义\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。',
+                content: `你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。
+
+请注意以下要点：
+
+1. **图表类型选择**：
+   - 根据用户需求智能选择最合适的图表类型（flowchart、sequenceDiagram、classDiagram、stateDiagram、gantt、pie等）
+   - 如果用户已提供Mermaid代码或指定图表类型，保持该类型不变，除非用户明确要求更改
+
+2. **语法规范**：
+   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符
+   - 连接关系必须使用英文符号和标识符
+   - 节点文本中使用中文全角括号"（）"而非英文半角括号"()"
+   - 避免在节点文本中使用特殊字符如：[]，()，{}，&，#，%，$等，用中文对应符号或描述替代
+   - 避免使用Mermaid保留关键字作为节点ID或样式类名（如：end、start、class、subgraph、direction等）
+
+3. **代码质量**：
+   - 确保所有引号、括号配对完整
+   - 每个连接关系独占一行，避免在同一行中连续使用多个箭头
+   - 排版清晰，注意节点间距和布局美观
+   - 添加适当的注释帮助理解复杂图表
+
+4. **样式美化**：
+   - 使用style语法直接为节点设置样式，格式为：style 节点ID fill:颜色,stroke:边框色,stroke-width:边框宽度
+   - 样式格式规范：fill填充色，stroke边框色，stroke-width边框宽度，color文字颜色
+   - 样式示例：
+     \`\`\`
+     %% 样式定义
+     style A fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+     style B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+     style C fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+     style D fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+     style E fill:#ffebee,stroke:#d32f2f,stroke-width:1px
+     \`\`\`
+   - 颜色可根据不同业务环节、部门、状态等进行区分，只要确保格式规范即可
+
+5. **异常规避**：
+   - 避免使用中文作为节点ID
+   - 节点文本长度控制在合理范围内，过长文本使用换行符\\n分割
+   - 确保图表结构完整，避免悬空节点
+   - 检查语法完整性，确保所有节点都有合适的连接
+   - 特殊字符处理：将&替换为"和"，%替换为"百分比"，#替换为"号"等
+   - 避免在同一条语句中混用不同的连接符号
+
+6. **错误修复**：
+   - 仔细分析Mermaid解析错误信息和错误位置
+   - 常见错误：语法错误、括号不匹配、箭头方向错误、保留关键字冲突、特殊字符冲突
+   - 修复时确保保留原图表的逻辑和结构
+   - 检查节点引用一致性，确保所有被引用的节点都已定义
+
+请仅返回被\`\`\`mermaid和\`\`\`包裹的代码，不要返回其他解释或内容。`,
                 timestamp: currentTime
             },
             {
@@ -1251,7 +1349,7 @@ ${code}
         const fixedCode = extractMermaidCode(result);
         
         if (fixedCode) {
-            // 更新编辑器内容前先移除事件监听器，防止死循环
+            // 更新编辑器内容前先移除事件监听器，防止触发死循环
             if (quill) {
                 quill.off('text-change');
                 quill.setText(fixedCode);
@@ -2280,7 +2378,48 @@ function createExampleConversations() {
     const currentTime = new Date().toISOString();
     
     // 系统消息模板
-    const systemPrompt = '你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。\n\n请注意以下要点：\n\n1. **图表类型选择**：\n   - 根据用户需求智能选择最合适的图表类型（flowchart、sequenceDiagram、classDiagram、stateDiagram、gantt、pie等）\n   - 如果用户已提供Mermaid代码或指定图表类型，保持该类型不变，除非用户明确要求更改\n\n2. **语法规范**：\n   - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符\n   - 连接关系必须使用英文符号和标识符\n   - 节点文本中使用中文全角括号"（）"而非英文半角括号"()"\n   - 避免在节点文本中使用特殊字符如：[]，()，{}，&，#，%，$等，用中文对应符号或描述替代\n   - 避免使用Mermaid保留关键字作为节点ID或样式类名（如：end、start、class、subgraph、direction等）\n\n3. **代码质量**：\n   - 确保所有引号、括号配对完整\n   - 每个连接关系独占一行，避免在同一行中连续使用多个箭头\n   - 排版清晰，注意节点间距和布局美观\n   - 添加适当的注释帮助理解复杂图表\n\n4. **样式美化**：\n   - 使用classDef定义样式类，为不同类型或环节的节点设置不同颜色和样式\n   - 使用:::语法直接为节点应用样式类，或使用class语句批量应用\n   - 样式类名避免使用保留关键字，推荐使用描述性名称如：startNode、processNode、decisionNode、warningNode、errorNode等\n   - 样式格式规范：fill填充色，stroke边框色，stroke-width边框宽度，color文字颜色\n   - 样式示例：\n     ```\n     %% 样式定义\n     classDef startNode fill:#e1f5fe,stroke:#0277bd,stroke-width:2px\n     classDef processNode fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px\n     classDef decisionNode fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px\n     classDef warningNode fill:#fff3e0,stroke:#f57c00,stroke-width:2px\n     \n     %% 应用样式\n     class A,G startNode\n     class B,D,F processNode\n     class C,E decisionNode\n     ```\n   - 颜色可根据不同业务环节、部门、状态等进行区分，只要确保格式规范即可\n\n5. **异常规避**：\n   - 避免使用中文作为节点ID\n   - 节点文本长度控制在合理范围内，过长文本使用换行符\\n分割\n   - 确保图表结构完整，避免悬空节点\n   - 检查语法完整性，确保所有节点都有合适的连接\n   - 特殊字符处理：将&替换为"和"，%替换为"百分比"，#替换为"号"等\n   - 避免在同一条语句中混用不同的连接符号\n\n6. **错误修复**：\n   - 仔细分析Mermaid解析错误信息和错误位置\n   - 常见错误：语法错误、括号不匹配、箭头方向错误、保留关键字冲突、特殊字符冲突\n   - 修复时确保保留原图表的逻辑和结构\n   - 检查节点引用一致性，确保所有被引用的节点都已定义\n\n请仅返回被```mermaid和```包裹的代码，不要返回其他解释或内容。';
+    const systemPrompt = `你是一个专业的Mermaid图表生成助手。你的任务是将用户的中文描述转化为有效的Mermaid语法图表代码，或修复现有Mermaid代码中的错误。
+请注意以下要点：
+1. **图表类型选择**：
+  - 根据用户需求智能选择最合适的图表类型（flowchart、sequenceDiagram、classDiagram、stateDiagram、gantt、pie等）
+  - 如果用户已提供Mermaid代码或指定图表类型，保持该类型不变，除非用户明确要求更改
+2. **语法规范**：
+  - 节点ID必须使用英文字母、数字和下划线，不含空格和特殊字符
+  - 连接关系必须使用英文符号和标识符
+  - 节点文本中使用中文全角括号"（）"而非英文半角括号"()"
+  - 避免在节点文本中使用特殊字符如：[]，()，{}，&，#，%，$等，用中文对应符号或描述替代
+  - 避免使用Mermaid保留关键字作为节点ID或样式类名（如：end、start、class、subgraph、direction等）
+3. **代码质量**：
+  - 确保所有引号、括号配对完整
+  - 每个连接关系独占一行，避免在同一行中连续使用多个箭头
+  - 排版清晰，注意节点间距和布局美观
+  - 添加适当的注释帮助理解复杂图表
+4. **样式美化**：
+  - 使用style语法直接为节点设置样式，格式为：style 节点ID fill:颜色,stroke:边框色,stroke-width:边框宽度
+  - 样式格式规范：fill填充色，stroke边框色，stroke-width边框宽度，color文字颜色
+  - 样式示例：
+  \`\`\`
+  %% 样式定义
+  style A fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+  style B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+  style C fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+  style D fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+  style E fill:#ffebee,stroke:#d32f2f,stroke-width:1px
+  \`\`\`
+  - 颜色可根据不同业务环节、部门、状态等进行区分，只要确保格式规范即可
+5. **异常规避**：
+  - 避免使用中文作为节点ID
+  - 节点文本长度控制在合理范围内，过长文本使用换行符\\n分割
+  - 确保图表结构完整，避免悬空节点
+  - 检查语法完整性，确保所有节点都有合适的连接
+  - 特殊字符处理：将&替换为"和"，%替换为"百分比"，#替换为"号"等
+  - 避免在同一条语句中混用不同的连接符号
+6. **错误修复**：
+  - 仔细分析Mermaid解析错误信息和错误位置
+  - 常见错误：语法错误、括号不匹配、箭头方向错误、保留关键字冲突、特殊字符冲突
+  - 修复时确保保留原图表的逻辑和结构
+  - 检查节点引用一致性，确保所有被引用的节点都已定义
+请仅返回被\`\`\`mermaid和\`\`\`包裹的代码，不要返回其他解释或内容。`;
     
     // 创建系统使用说明示例 - 确保语法完全正确
     const tutorialId = Date.now().toString();
@@ -2311,11 +2450,11 @@ function createExampleConversations() {
     M --> O
     N --> O
     
-    style A fill:#e1f5fe
-    style G fill:#c8e6c9
-    style I fill:#fff3e0
-    style J fill:#f3e5f5
-    style O fill:#e8f5e8`;
+    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+    style G fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px
+    style I fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+    style J fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style O fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px`;
    
     const tutorialConversation = {
         id: tutorialId,
@@ -2437,7 +2576,24 @@ function loadExamples() {
     L -->|拒绝| O[投递其他期刊]
     N --> K
     O --> K
-    M --> P[结束]`
+    M --> P[结束]
+    
+    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+    style B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style C fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style D fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+    style E fill:#ffebee,stroke:#d32f2f,stroke-width:1px
+    style F fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px
+    style G fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style H fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style I fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+    style J fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style K fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style L fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+    style M fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style N fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style O fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+    style P fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px`
         },
         sequenceDiagram: {
             name: "会议组织时序图",
@@ -2470,7 +2626,12 @@ function loadExamples() {
     
     组织者->>与会者: 会议总结
     组织者->>与会者: 发送会议记录
-    与会者-->>组织者: 反馈意见`
+    与会者-->>组织者: 反馈意见
+    
+    style 组织者 fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+    style 与会者 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style 技术支持 fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style 场地 fill:#fff3e0,stroke:#f57c00,stroke-width:1px`
         },
         classDiagram: {
             name: "研究数据结构类图",
@@ -2511,7 +2672,12 @@ function loadExamples() {
     研究项目 "1" *-- "多" 研究人员 : 包含
     研究项目 "1" *-- "多" 实验数据 : 产生
     研究人员 "多" -- "多" 论文 : 发表
-    实验数据 "多" -- "多" 论文 : 支持`
+    实验数据 "多" -- "多" 论文 : 支持
+    
+    style 研究项目 fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+    style 研究人员 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style 实验数据 fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style 论文 fill:#fff3e0,stroke:#f57c00,stroke-width:1px`
         },
         animalClass: {
             name: "动物类层次结构",
@@ -2570,7 +2736,14 @@ function loadExamples() {
     哺乳动物 <|-- 犬科动物
     
     猫科动物 : +示例：狮子、老虎、家猫
-    犬科动物 : +示例：狼、狐狸、家犬`
+    犬科动物 : +示例：狼、狐狸、家犬
+    
+    style 动物 fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
+    style 哺乳动物 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style 鸟类 fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
+    style 爬行动物 fill:#fff3e0,stroke:#f57c00,stroke-width:1px
+    style 猫科动物 fill:#ffebee,stroke:#d32f2f,stroke-width:1px
+    style 犬科动物 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px`
         },
         pie: {
             name: "研究经费分配饼图",
