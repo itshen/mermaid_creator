@@ -2576,24 +2576,7 @@ function loadExamples() {
     L -->|拒绝| O[投递其他期刊]
     N --> K
     O --> K
-    M --> P[结束]
-    
-    style A fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
-    style B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style C fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style D fill:#fff3e0,stroke:#f57c00,stroke-width:1px
-    style E fill:#ffebee,stroke:#d32f2f,stroke-width:1px
-    style F fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px
-    style G fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style H fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style I fill:#fff3e0,stroke:#f57c00,stroke-width:1px
-    style J fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style K fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style L fill:#fff3e0,stroke:#f57c00,stroke-width:1px
-    style M fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style N fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style O fill:#fff3e0,stroke:#f57c00,stroke-width:1px
-    style P fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px`
+    M --> P[结束]`
         },
         sequenceDiagram: {
             name: "会议组织时序图",
@@ -2626,12 +2609,7 @@ function loadExamples() {
     
     组织者->>与会者: 会议总结
     组织者->>与会者: 发送会议记录
-    与会者-->>组织者: 反馈意见
-    
-    style 组织者 fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
-    style 与会者 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style 技术支持 fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style 场地 fill:#fff3e0,stroke:#f57c00,stroke-width:1px`
+    与会者-->>组织者: 反馈意见`
         },
         classDiagram: {
             name: "研究数据结构类图",
@@ -2672,12 +2650,7 @@ function loadExamples() {
     研究项目 "1" *-- "多" 研究人员 : 包含
     研究项目 "1" *-- "多" 实验数据 : 产生
     研究人员 "多" -- "多" 论文 : 发表
-    实验数据 "多" -- "多" 论文 : 支持
-    
-    style 研究项目 fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
-    style 研究人员 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style 实验数据 fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style 论文 fill:#fff3e0,stroke:#f57c00,stroke-width:1px`
+    实验数据 "多" -- "多" 论文 : 支持`
         },
         animalClass: {
             name: "动物类层次结构",
@@ -2736,14 +2709,7 @@ function loadExamples() {
     哺乳动物 <|-- 犬科动物
     
     猫科动物 : +示例：狮子、老虎、家猫
-    犬科动物 : +示例：狼、狐狸、家犬
-    
-    style 动物 fill:#e1f5fe,stroke:#0277bd,stroke-width:1px
-    style 哺乳动物 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
-    style 鸟类 fill:#e8f5e8,stroke:#2e7d32,stroke-width:1px
-    style 爬行动物 fill:#fff3e0,stroke:#f57c00,stroke-width:1px
-    style 猫科动物 fill:#ffebee,stroke:#d32f2f,stroke-width:1px
-    style 犬科动物 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px`
+    犬科动物 : +示例：狼、狐狸、家犬`
         },
         pie: {
             name: "研究经费分配饼图",
